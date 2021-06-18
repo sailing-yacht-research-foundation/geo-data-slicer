@@ -1,325 +1,277 @@
+/** The internet provides us with 3 types of weather data:
+ * 1) Data which is released on a schedule and that always covers the same geographic range.
+ *          - Weather models
+ * 2) Data which always covers the same geographic range, but is either not released on a schedule, is updated so frequently as to be considered "real-time", or is updated infrequently randomly.
+ *          - Sail Flow
+ *          - Anchored ocean buoys
+ * 3) Data which does not cover the same geographic range and is not released according to any schedule. It may be real time or it may not have been updated in months.
+ *          - Ship reports
+ *          - Moving ocean "gliders" or drifting buoys.
+ * Whereas the geo-data-archiver is concerned with the first type of data, this service is concerned with collecting the second two types for a particular race.
+ * It then collects the region and time slice from the models that are archived by the geo-data-archiver, and it sends all of this data to the analytics engine.
+ * 
+ * This service doesn't know anything about races or sailing in particular, but it does know about weather utilities, geojson and geoindices.
+ */
+
+
 var express = require("express");
+const puppeteer = require('puppeteer');
 const execSync = require('child_process').execSync;
 const turf = require('@turf/turf');
 const axios = require('axios').default
+const ws = require('ws') 
 const fs = require('fs');
 
-const LONGITUDE_CONVENTION = {ZERO_TO_THREE_SIXTY:'0to360', NEGATIVE_ONE_EIGHTY_TO_ONE_EIGHTY:'-180to180'}
-const SPATIAL_RESOLUTION_UNITS = {DEGREES:'degrees'}
-const TEMPORAL_RESOLUTION_UNITS = {HOURS:3600000}
-const DAYS_PER_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+const KDBush = require('kdbush');
+var geokdbush = require('geokdbush');
+var cities = require('all-the-cities');
 
-const ARCHIVE_TIME_UNITS = {DAYS:'days'} // The units used when an archive says it keeps data stored for n units. For example, an archive may hold the last 6 days of data. In that case the units are days.
 
-// R%R% is the release hour (ex 06, or 18)
-// T%T%T% is the timestep number, for instance 000 for the h0, or 180 for the 180th timestep in the future (hour)
-// Y%Y%Y%Y% is year
-// M%M% is month
-// D%D% is day
-const GLOBAL_MODEL_SOURCES_NOW = {
-    GFS:{name:'GFS', 
-        longitude_convention: LONGITUDE_CONVENTION.ZERO_TO_THREE_SIXTY, 
-        url_supports_spatial_slicing: true,
-        csv_order:{level:3, lon:4, lat:5, variable:2, date:0, value:6},
-        spatial_resolution:0.25, 
-        spatial_resolution_units:SPATIAL_RESOLUTION_UNITS.DEGREES, 
-        release_times_utc:['00','06','12','18'], 
-        timestep_resolution: 1, 
-        timestep_miliseconds: TEMPORAL_RESOLUTION_UNITS.HOURS, 
-        max_timesteps:120,
-        archive_time_units: ARCHIVE_TIME_UNITS.DAYS,
-        number_of_time_units_on_file: 9,
-        file_url:'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25_1hr.pl?file=gfs.tR%R%z.pgrb2.0p25.fT%T%T%&lev_10_m_above_ground=on&var_UGRD=on&var_VGRD=on&subregion=&leftlon=LEFT_LON&rightlon=RIGHT_LON&toplat=TOP_LAT&bottomlat=BOTTOM_LAT&dir=%2Fgfs.Y%Y%Y%Y%M%M%D%D%%2FR%R%%2Fatmos'}
+async function getShipReports() {
+    const browser = await puppeteer.launch()
+    const page = await browser.newPage()
+    await page.goto('https://www.ndbc.noaa.gov/ship_obs.php?uom=E&time=2')
+    const values = await page.evaluate(()=>{
+        const values = []
+        document.querySelectorAll('#contentarea > pre > span').forEach(s => {values.push(s.textContent.split(/[ ,]+/))})
+        return values
+    })
+
+    const valuesDictionaries = []
+    var counter = 0
+    values.forEach(valuesArray => {
+        if(counter > 0){
+            valuesDictionaries.push(valuesToDictionary(valuesArray))
+        }
+        counter++
+    })
+    await browser.close()
+    return valuesDictionaries
 }
 
-
-// 40 to 84.7	140 to 244.7	0.3 x 0.3	rtofs_glo.t00z.Axxx_alaska_std.grb2
-// Arctic	60 to 79.92	160 to 235.92	0.08 x 0.08	rtofs_glo.t00z.Axxx_arctic_std.grb2
-// Bering	40 to 67.12	155 to 210.92	0.08 x 0.08	rtofs_glo.t00z.Axxx_bering_std.grb2
-// Guam	0 to 29.92	130 to 179.92	0.08 x 0.08	rtofs_glo.t00z.Axxx_guam_std.grb2
-// Gulf of Alaska	40 to 62	195 to 236	0.5 x 0.5	rtofs_glo.t00z.Axxx_gulf_alaska_std.grb2
-// Honolulu	0 to 39.92	180 to 229.92	0.08 x 0.08	rtofs_glo.t00z.Axxx_honolulu_std.grb2
-// Samoa	-30 to -0.08	170 to 214.72	0.08 x 0.08	rtofs_glo.t00z.Axxx_samoa_std.grb2
-// Tropical Pacific	-40 to 39	130 to 249	1 x 1	rtofs_glo.t00z.Axxx_trop_paci_lowres_std.grb2
-// Western Atlantic	10 to 44.72	260 to 305.92	0.08 x 0.08	rtofs_glo.t00z.Axxx_west_atl_std.grb2
-// Western Conus	10 to 59.92	210 to 259.92	0.08 x 0.08	rtofs_glo.t00z.Axxx_west_conus_std.grb2
-const REGIONAL_MODEL_SOURCES_NOW = {
-    RTOFS_FORECAST_ALASKA : {},
-    RTOFS_FORECAST_BERING : {},
-    RTOFS_FORECAST_GUAM : {},
-    RTOFS_FORECAST_ALASKA_GULF : {},
-    RTOFS_FORECAST_ARCTIC : {},
-    RTOFS_FORECAST_HONULULU : {},
-    RTOFS_FORECAST_SAMOA : {},
-    RTOFS_FORECAST_TROPICAL_PACIFIC : {},
-    RTOFS_FORECAST_WESTERN_ATLANTIC : {},
-    RTOFS_FORECAST_WESTERN_CONUS : {},
-    RTOFS_NOWCAST_ALASKA : {},
-    RTOFS_NOWCAST_BERING : {},
-    RTOFS_NOWCAST_GUAM : {},
-    RTOFS_NOWCAST_ALASKA_GULF : {},
-    RTOFS_NOWCAST_ARCTIC : {},
-    RTOFS_NOWCAST_HONULULU : {},
-    RTOFS_NOWCAST_SAMOA : {},
-    RTOFS_NOWCAST_TROPICAL_PACIFIC : {},
-    RTOFS_NOWCAST_WESTERN_ATLANTIC : {},
-    RTOFS_NOWCAST_WESTERN_CONUS : {},
-    
-    
-    
+function format(valuesDictionary){
+    var count = 0
+    Object.keys(valuesDictionary).forEach(key => {
+        // Skip the first value since it's "ship"
+        if(count > 0){
+            try{
+                valuesDictionary[key] = parseFloat(valuesDictionary[key])
+            }catch(err){
+                valuesDictionary[key] = null
+            }
+            if(isNaN(valuesDictionary[key])){
+                valuesDictionary[key] = null
+            }
+        }
+        count++
+    })
 }
 
-function padZeros(numSpaces, positiveInteger){
-    const integer = positiveInteger
-    var prefix = ''
-    for(zeroCounter = 1; zeroCounter <= numSpaces; zeroCounter++){
-        prefix = prefix + '0'
-    }
-
-    var integerDigits = 0
-    if(integer < 10 && integer >= 0){
-        integerDigits = 1
-    }else if(integer >= 10 && integer < 100){
-        integerDigits = 2
-    }else if(integer >= 100 && integer < 1000){
-        integerDigits = 3
-    }else{
-        return integer.toString()
-    }
-
-    var result = prefix.substr(0, prefix.length - integerDigits) + integer.toString()
-    return result
+function valuesToDictionary(values){
+    const valuesDictionary =  {source:values[0], hour:values[1],  lat:values[2], lon:values[3], twd_degrees:values[4], tws_kts:values[5], gust_kts:values[6], waveheight_ft:values[7]}
+    format(valuesDictionary)
+    return valuesDictionary
 }
 
+function weatherSourceToFeatureCollection(sourceList){
+    const points = []
+    sourceList.forEach(p => {
+        const point = turf.point([p.lon, p.lat], p);
+        points.push(point)
+    })
+    return turf.featureCollection(points)
+}
+
+// We need both indices and feature collections.
+// Indices do extremely fast lookups for points, 
+// FeatureCollections help us find all points within a polygon.
+const buoysAndSailflow = JSON.parse(fs.readFileSync('data/dynamic_weather_sources.json', 'utf-8'))
+var shipReportIndex = null
+const sailFlowSpotIndex = new KDBush(buoysAndSailflow.SAILFLOW, (v) => v.lon, (v) => v.lat )
+const noaaBuoyIndex = new KDBush(buoysAndSailflow.NOAA, (v) => v.lon, (v) => v.lat )
+
+var shipReportsFeatureCollection = null
+const sailFlowSpotFeatureCollection = weatherSourceToFeatureCollection(buoysAndSailflow.SAILFLOW)
+const noaaBuoyFeatureCollection = weatherSourceToFeatureCollection(buoysAndSailflow.NOAA)
+
+// getShipReports().then((values) => {
+//     console.log(values)
+//     shipReportIndex = new KDBush(values, (v) => v.lon, (v) => v.lat);
+//     shipReportsFeatureCollection = weatherSourceToFeatureCollection(values)
+// })
+
+function makeGeoJsons(csvData){
+    const lines = csvData.split('\n')
+    const timeToLevelToPoints = {}
+    const geoJsons = []
+    const indices = {}
+    lines.forEach(line => {
+        const lineComponents = line.split(',')
+        if(lineComponents.length == 7){
+            const time1 = lineComponents[0]
+            const time2 = lineComponents[1]
+    
+            const variable = lineComponents[2].replace(/"/gm, '')
+            const level = lineComponents[3]
+            const lonString = lineComponents[4]
+            const latString = lineComponents[5]
+            const pointHash = lonString+latString
+
+            const lon = parseFloat(lineComponents[4])
+            const lat = parseFloat(lineComponents[5])
+            const value = parseFloat(lineComponents[6])
+
+            if(timeToLevelToPoints[time1] === undefined){
+                timeToLevelToPoints[time1] = {}
+                indices[time1] = {}
+            }
 
 
-function getURLSForDay(day, month, year, model, leftLon, rightLon, topLat, bottomLat){
-    const urls = []
-    const dayString = padZeros(2, day)
-    const monthString = padZeros(2, month)
-    const yearString = padZeros(4, year)
-
-    model.release_times_utc.forEach(releaseTimeString => {
-        const url = model.file_url
-        const hour = parseInt(releaseTimeString)
-        const dateAvailable = new Date(year, month - 1, day, hour)
-        const availableTime = dateAvailable.getTime()
-
-        for(timestepIndex = 0; timestepIndex <= (model.timestep_resolution*model.max_timesteps); timestepIndex += model.timestep_resolution){
-            const paddedTimestep = padZeros(3, timestepIndex)
-           
-            const formattedUrl = url.replaceAll('Y%Y%Y%Y%', yearString).replaceAll('M%M%', monthString).replaceAll('D%D%', dayString).replaceAll('R%R%', releaseTimeString).replaceAll('T%T%T%', paddedTimestep).replaceAll('LEFT_LON',leftLon.toString()).replaceAll('RIGHT_LON', rightLon.toString()).replaceAll('TOP_LAT', topLat.toString()).replaceAll('BOTTOM_LAT', bottomLat.toString())
-            const startTime = availableTime + (timestepIndex * model.timestep_miliseconds)
-            const timeSliceStart = new Date(startTime)
-            const endTime = startTime + (model.timestep_resolution * model.timestep_miliseconds)
-            const timeSliceEnd = new Date(endTime)
-
-            urls.push({releaseTime:dateAvailable, startTime: timeSliceStart, endTime: timeSliceEnd, url: formattedUrl})
+            if(timeToLevelToPoints[time1][level] === undefined){
+                timeToLevelToPoints[time1][level] = {}
+            }
+            
+            if(timeToLevelToPoints[time1][level][pointHash] === undefined){
+                timeToLevelToPoints[time1][level][pointHash] = {lat:lat, lon:lon}
+            }
+            timeToLevelToPoints[time1][level][pointHash][variable] = value  
         }
     })
-
-    return urls
-}
-
-
-function dateToUTCDate(date){
-    return new Date(date.toISOString())
-}
-
-class SpatialBounds {
-    constructor(leftLon, rightLon, topLat, bottomLat){
-
-        // TODO: Make sure it makes sense - meaning we don't have longitudes > 180 or 360. or latitudes < -90
-
-        this.leftLon = leftLon
-        this.rightLon = rightLon
-        this.topLat = topLat
-        this.bottomLat = bottomLat
-
-    }
-
-    // getLeftLon(longitudeConvention){
-    //     if(longitudeConvention === LONGITUDE_CONVENTION.NEGATIVE_ONE_EIGHTY_TO_ONE_EIGHTY){
-    //         if(this.leftLon < 0){
-
-    //         }
-    //     }
-    // }
-}
-
-function buildUrls(targetStartDateTimeUTC, targetEndDateTimeUTC, spatialBounds){
     
-    const startDate = dateToUTCDate(targetStartDateTimeUTC)
-    const startYear = startDate.getUTCFullYear()
-    const startMonth = startDate.getUTCMonth() + 1
-    const startDay = startDate.getUTCDate()
-    const startHour = startDate.getUTCHours()
+    Object.keys(timeToLevelToPoints).forEach(time => {
+        Object.keys(timeToLevelToPoints[time]).forEach(level => {
+            const geoJsonPoints = []
+            const points = []
+            Object.values(timeToLevelToPoints[time][level]).forEach(p => {
+                try{
+                    const geoJsonPoint = turf.point([p.lon, p.lat], p)
+                    geoJsonPoints.push(geoJsonPoint)
+                    points.push(p)
+                }catch(err){
 
-    const endDate = dateToUTCDate(targetEndDateTimeUTC)
-    const endYear = endDate.getUTCFullYear()
-    const endMonth = endDate.getUTCMonth() + 1
-    const endDay = endDate.getUTCDate()
-    const endHour = endDate.getUTCHours()
-
-
-    // Get global models first.
-    const globalModelKeys = Object.keys(GLOBAL_MODEL_SOURCES_NOW)
-    var globalModelUrls = []
-    globalModelKeys.forEach(key => {
-        const model = GLOBAL_MODEL_SOURCES_NOW[key]
-
-        var yearCounter = startYear
-        var monthCounter = startMonth
-        var dayCounter = startDay
-
-        while(yearCounter <= endYear){
-
-            if(yearCounter < endYear){
-                while(monthCounter <= 12){
-                     while(dayCounter < DAYS_PER_MONTH[monthCounter]){
-                        
-                        globalModelUrls = globalModelUrls.concat(getURLSForDay(dayCounter, monthCounter, yearCounter, model, spatialBounds.leftLon, spatialBounds.rightLon, spatialBounds.topLat, spatialBounds.bottomLat))
-                        dayCounter += 1
-                    }
-                    montCounter += 1
-                    dayCounter = 1
                 }
-            }else{
-                while(monthCounter <= endMonth){
-                    if(monthCounter < endMonth){
-                        while(dayCounter <= DAYS_PER_MONTH[monthCounter]){
-                            globalModelUrls = globalModelUrls.concat(getURLSForDay(dayCounter, monthCounter, yearCounter, model, spatialBounds.leftLon, spatialBounds.rightLon, spatialBounds.topLat, spatialBounds.bottomLat))
-                            dayCounter += 1
-                        }
-
-                    }else{
-                        while(dayCounter <= endDay){
-                            globalModelUrls = globalModelUrls.concat(getURLSForDay(dayCounter, monthCounter, yearCounter, model, spatialBounds.leftLon, spatialBounds.rightLon, spatialBounds.topLat, spatialBounds.bottomLat))
-                            dayCounter += 1
-                        }
-                    }
-                   
-                    monthCounter +=1
-                    dayCounter = 1
-                }
-            }
-            yearCounter += 1
-            monthCounter = 1
-        }
-
-    })
-
-    return globalModelUrls
-}
-
-function gribToGeoJson(grib, levels, variables){
-    const pointsJsons = []
-    // TODO create separate geojsons for each level and variable. 
-    Object.keys(grib).forEach(point => {
-        const properties = grib[point]
-        pointsJsons.push(turf.point(JSON.parse(point), properties))
-    })
-    return turf.featureCollection(pointsJsons)
-}
-
-function processGrib(csvFilename, csvOrder){
-    const file = fs.readFileSync(csvFilename).toString('utf-8')
-      const lines = file.split("\n")
-      const points = {}
-      const levels = []
-      const variables = []
-      lines.forEach(line => {
-          const row = line.split(',')
-          const level = row[csvOrder.level]
-          if(!levels.includes(level)){
-              levels.push(level)
-          }
-
-          const lon = parseFloat(row[csvOrder.lon])
-          const lat = parseFloat(row[csvOrder.lat])
-          const variable = row[csvOrder.variable]
-          if(!variables.includes(variable)){
-              variables.push(variable)
-          }
-          const date = row[csvOrder.date]
-          const value = parseFloat(row[csvOrder.value])
-          if(row[4] !== null && row[5] !== null && row[4] !== undefined && row[5] !== undefined){
-            const pointString = JSON.stringify([lon, lat])
-            if(points[pointString] === undefined){
-                points[pointString] = {}
-
-            }
-            if(points[pointString][level] === undefined){
-                points[pointString][level] = {}
-            }
-
-            if(points[pointString][level][variable] === undefined){
-                points[pointString][level][variable] = []
-            }
-
-            points[pointString][level][variable].push({date:(new Date(date)).getTime(), value:value})
-          }
-          
-      })
-
-      // Sort all points by time.
-      Object.keys(points).forEach(point => {
-          Object.keys(points[point]).forEach(level => {
-            Object.keys(points[point][level]).forEach(variable => {
-                points[point][level][variable] = points[point][level][variable].sort(function(a,b) {
-                    return (b.date - a.date)
-                });
             })
-          })
-      })
-      const json = gribToGeoJson(points)
-      fs.writeFileSync('geojson.json', JSON.stringify(json))
-     // code = execSync('node -v');
+
+            const index = new KDBush(points, (v) => v.lon, (v) => v.lat )
+            indices[time][level] = index
+            const geoJson = turf.featureCollection(geoJsonPoints)
+            geoJson.properties = {level:level.replace(/"/gm, ''), time:time.replace(/"/gm, '')}
+            geoJsons.push(geoJson)
+        })
+    })
+    return {geoJsons:geoJsons, indices:indices}
 }
 
-function grabGrib(fileUrl){
-    try{
-        const binaryData = axios.get(fileUrl,  {
-            responseType: 'arraybuffer'
-        })
-    .then(function (response) {
-      // handle success
-    //   var buf = Buffer.from(response.data);
-    //   fs.writeFileSync('gfs.grib', buf, 'base64');
-    //   execSync('wgrib2 gfs.grib -small_grib -186:-184 -37.86:-35 subregion.grib')
-    //   execSync('wgrib2 subregion.grib -csv subregion.csv')
+function sliceGribByRegion(roi, filename, model){
+    // TODO: get spatial bounds from roi.
+    const leftLon = -123.6621
+    const rightLon = -121.3303
+    const topLat = 38.6898
+    const bottomLat = 37.2347
+
+    execSync('wgrib2 ' + filename + ' -small_grib ' + leftLon +':' + rightLon + ' ' + bottomLat + ':' + topLat + ' small_grib.grib2')
+    //execSync('rm ' + filename)
+    execSync('wgrib2 small_grib.grib2 -csv grib.csv')
+    //execSync('rm small_grib.grib2')
+    const csvData = fs.readFileSync('grib.csv', 'utf-8')
+    const parsedData = makeGeoJsons(csvData)
+    const geoJsons = parsedData.geoJsons
+    const indicies = parsedData.indices
+
+    var counter = 0
+    geoJsons.forEach(geoJson => {
+        console.log(geoJson)
+        if(geoJson.properties.level === '10 m above ground' || geoJson.properties.level === 'surface'){
+            fs.writeFileSync(counter.toString() +  '.json', JSON.stringify(geoJson))
+            counter++
+        }
       
     })
-    }catch(err){
-        console.log(fileUrl)
-    }
+
 }
 
-// const today = new Date()
-// const twoDaysAgo = new Date(today.getTime() - (2 * 24 * 60 * 60 * 1000));
-// const urls = buildUrls(twoDaysAgo, today, new SpatialBounds(0,360, 90, -90))
+// roi: region of interest (polygon)
+function getArchivedDated(roi, startTime, endTime){
+    /** TODO
+     *      a) Check size of roi and react accordingly. Maybe we need a util to calculate sizes of things and adjust our approach accordingly. Maybe we need a way to just determine is roi oceanic or local.
+     *      b) Query PostGIS for space and time boundaries to get a list of s3 files.
+     *      c) Download said s3 files. 
+     *      d) Slice GRIBs into regions using wgrib2 or cdo, then convert to geojson and (either upload gribs and geojson to s3 and save the record or send this info to the analysis engine so it can do it).
+     *      e) Return with a either a list of sliced files in an s3 bucket just for sliced data, or actually return the geojson objects with time and boundary info. 
+     */
+}
 
-// grabGrib(urls[0].url)
+function processRegionRequest(roi, startTimeUnixMS, endTimeUnixMS, webhook, webhookToken, updateFrequencyMinutes){
+    // TODO:
+    //const archivedData = getArchivedData(roi, startTimeUnixMS, endTimeUnixMS)
+    const containedShipReports = turf.pointsWithinPolygon(shipReportsFeatureCollection, roi);
+    const containedNoaaBuoys = turf.pointsWithinPolygon(noaaBuoyFeatureCollection, roi)
+    const containedSailflowSpots = turf.pointsWithinPolygon(sailFlowSpotFeatureCollection, roi);
 
-processGrib('subregion.csv', GLOBAL_MODEL_SOURCES_NOW.GFS.csv_order)
+}
 
-// First arg is the input file path, second arg is CLI options as JS object
-// grib2json('gfs.grib', {
-//   data: true,
-//   output: 'output.json'
-// })
-// .then(function (json) {
-//   // Do whatever with the json data, same format as output of the CLI
-// })
+function processPointRequest(point, time, webhook, webhookToken){
 
-// var app = express();
-// app.listen(3000, () => {
-//  console.log("Server running on port 3000");
+}
+
+// const wss = new WebSocket.Server({
+//     port: 8080,
+//     perMessageDeflate: {
+//       zlibDeflateOptions: {
+//         // See zlib defaults.
+//         chunkSize: 1024,
+//         memLevel: 7,
+//         level: 3
+//       },
+//       zlibInflateOptions: {
+//         chunkSize: 10 * 1024
+//       },
+//       // Other options settable:
+//       clientNoContextTakeover: true, // Defaults to negotiated value.
+//       serverNoContextTakeover: true, // Defaults to negotiated value.
+//       serverMaxWindowBits: 10, // Defaults to negotiated value.
+//       // Below options specified as default values.
+//       concurrencyLimit: 10, // Limits zlib concurrency for perf.
+//       threshold: 1024 // Size (in bytes) below which messages
+//       // should not be compressed.
+//     }
 // });
 
-//buildUrls(dateToUTCDate(new Date()), dateToUTCDate(new Date()))
-//grabGrib('https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?file=gfs.t00z.pgrb2.1p00.f000&lev_10_m_above_mean_sea_level=on&var_UGRD=on&var_U-GWD=on&leftlon=0&rightlon=360&toplat=90&bottomlat=-90&dir=%2Fgfs.20210531%2F00%2Fatmos')
-//grabGrib('https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.20210524/00/atmos/gfs.t00z.pgrb2.0p50.f033')
-// app.get("/", (req, res, next) => {
-//     res.json(["Tony","Lisa","Michael","Ginger","Food"]);
-// });
+
+// wss.on('connection', function connection(ws) {
+//     console.log('SERVER: connected')
+    
+//     ws.on('close', function close() {
+    
+//     })
+
+//     ws.on('message', function incoming(data) {
+        
+//     })
+// })
+
+const app = express()
+const port = 3000
+app.use(express.json());
+
+app.post('/', function(request, response){
+    
+    const roi = request.body.roi
+    const startTimeUnixMS = request.body.startTimeUnixMS
+    const endTimeUnixMS = request.body.endTimeUnixMS
+    // Where should we send the data?
+    const webhook = request.body.webhook
+    const webhookToken = request.body.webhookToken
+
+    // How often should we check the real time sources for new data?
+    const updateFrequencyMinutes = request.body.updateFrequencyMinutes
+
+    processRequest(roi, startTimeUnixMS, endTimeUnixMS, webhook, webhookToken, updateFrequencyMinutes)
+
+
+});
+app.listen(port, () => {
+  console.log(`Example app listening at http://localhost:${port}`)
+})
+
+sliceGribByRegion(null, 'hrrr.t00z.wrfsubhf01.grib2')
