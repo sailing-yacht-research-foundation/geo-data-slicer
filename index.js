@@ -11,6 +11,8 @@
  * It then collects the region and time slice from the models that are archived by the geo-data-archiver, and it sends all of this data to the analytics engine.
  * 
  * This service doesn't know anything about races or sailing in particular, but it does know about weather utilities, geojson and geoindices.
+ * 
+ * We need to figure out how a request should work.
  */
 
 
@@ -85,20 +87,22 @@ function weatherSourceToFeatureCollection(sourceList){
 // We need both indices and feature collections.
 // Indices do extremely fast lookups for points, 
 // FeatureCollections help us find all points within a polygon.
-const buoysAndSailflow = JSON.parse(fs.readFileSync('data/dynamic_weather_sources.json', 'utf-8'))
+const pointSourcesToScrape = JSON.parse(fs.readFileSync('data/dynamic_weather_sources.json', 'utf-8'))
 var shipReportIndex = null
-const sailFlowSpotIndex = new KDBush(buoysAndSailflow.SAILFLOW, (v) => v.lon, (v) => v.lat )
-const noaaBuoyIndex = new KDBush(buoysAndSailflow.NOAA, (v) => v.lon, (v) => v.lat )
+const sailFlowSpotIndex = new KDBush(pointSourcesToScrape.SAILFLOW, (v) => v.lon, (v) => v.lat )
+const noaaBuoyIndex = new KDBush(pointSourcesToScrape.NOAA, (v) => v.lon, (v) => v.lat )
+const windfinderIndex = new KDBush(pointSourcesToScrape.WINDFINDER, (v) => v.lon, (v) => v.lat )
 
 var shipReportsFeatureCollection = null
-const sailFlowSpotFeatureCollection = weatherSourceToFeatureCollection(buoysAndSailflow.SAILFLOW)
-const noaaBuoyFeatureCollection = weatherSourceToFeatureCollection(buoysAndSailflow.NOAA)
+const sailFlowSpotFeatureCollection = weatherSourceToFeatureCollection(pointSourcesToScrape.SAILFLOW)
+const noaaBuoyFeatureCollection = weatherSourceToFeatureCollection(pointSourcesToScrape.NOAA)
+const windfinderFeatureCollection = weatherSourceToFeatureCollection(pointSourcesToScrape.WINDFINDER)
 
-// getShipReports().then((values) => {
-//     console.log(values)
-//     shipReportIndex = new KDBush(values, (v) => v.lon, (v) => v.lat);
-//     shipReportsFeatureCollection = weatherSourceToFeatureCollection(values)
-// })
+getShipReports().then((values) => {
+    console.log(values)
+    shipReportIndex = new KDBush(values, (v) => v.lon, (v) => v.lat);
+    shipReportsFeatureCollection = weatherSourceToFeatureCollection(values)
+})
 
 function makeGeoJsons(csvData){
     const lines = csvData.split('\n')
@@ -202,11 +206,13 @@ function getArchivedDated(roi, startTime, endTime){
 }
 
 function processRegionRequest(roi, startTimeUnixMS, endTimeUnixMS, webhook, webhookToken, updateFrequencyMinutes){
-    // TODO:
+    // TODO: Figure out where to do the actual Puppeteer scraping.
+
     //const archivedData = getArchivedData(roi, startTimeUnixMS, endTimeUnixMS)
-    const containedShipReports = turf.pointsWithinPolygon(shipReportsFeatureCollection, roi);
+    const containedShipReports = turf.pointsWithinPolygon(shipReportsFeatureCollection, roi)
     const containedNoaaBuoys = turf.pointsWithinPolygon(noaaBuoyFeatureCollection, roi)
-    const containedSailflowSpots = turf.pointsWithinPolygon(sailFlowSpotFeatureCollection, roi);
+    const containedSailflowSpots = turf.pointsWithinPolygon(sailFlowSpotFeatureCollection, roi)
+    const containedWindfinderPoints = turf.pointsWithinPolygon(windfinderFeatureCollection, roi)
 
 }
 
