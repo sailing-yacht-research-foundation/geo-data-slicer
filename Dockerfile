@@ -32,8 +32,9 @@ RUN apt-get update && apt-get install -y cron
 RUN apt-get install m4 -y
 RUN apt-get install git -y
 
-RUN apt install nodejs -y
-RUN apt install npm -y
+RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
+RUN apt-get install -y nodejs
+RUN apt-get install -y build-essential
 
 # HDF5 Installation
 RUN wget https://www.hdfgroup.org/package/bzip2/?wpdmdl=4300 \
@@ -72,7 +73,7 @@ RUN cp grib2/wgrib2/wgrib2 /usr/local/bin \
 RUN cd /opt \
     && wget http://www.imagemagick.org/download/ImageMagick.tar.gz \
     && tar xvzf ImageMagick.tar.gz \
-    && cd ImageMagick-7.0.11-13 \
+    && cd ImageMagick-7.1.0-2 \
     && touch configure \
     && ./configure \
     && make \
@@ -174,8 +175,12 @@ RUN pip3 install cartopy cftime oktopus tqdm cf-units dask stratify pyugrid
 RUN apt-get install -y aptitude
 RUN aptitude install nco -y
 
-RUN add-apt-repository ppa:linuxuprising/java
-RUN apt install -f oracle-java16-set-default -y
+RUN apt-get update && \
+    add-apt-repository -y ppa:linuxuprising/java && \
+    apt-get update && \
+    echo oracle-java16-installer shared/accepted-oracle-license-v1-2 select true | /usr/bin/debconf-set-selections && \
+    apt-get install -y oracle-java16-installer && \
+    apt install oracle-java16-set-default
 
 RUN npm install -g weacast-grib2json
 RUN export JAVA_HOME=/usr
