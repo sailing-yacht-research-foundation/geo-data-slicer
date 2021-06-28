@@ -9,293 +9,411 @@
  *          - Moving ocean "gliders" or drifting buoys.
  * Whereas the geo-data-archiver is concerned with the first type of data, this service is concerned with collecting the second two types for a particular race.
  * It then collects the region and time slice from the models that are archived by the geo-data-archiver, and it sends all of this data to the analytics engine.
- * 
+ *
  * This service doesn't know anything about races or sailing in particular, but it does know about weather utilities, geojson and geoindices.
- * 
+ *
  * We need to figure out how a request should work.
  */
 
-
 var express = require("express");
-const puppeteer = require('puppeteer');
-const execSync = require('child_process').execSync;
-const turf = require('@turf/turf');
-const axios = require('axios').default
-const ws = require('ws') 
-const fs = require('fs');
+const puppeteer = require("puppeteer");
+const execSync = require("child_process").execSync;
+const turf = require("@turf/turf");
+const axios = require("axios").default;
+const ws = require("ws");
+const fs = require("fs");
 
-
-const KDBush = require('kdbush');
-var geokdbush = require('geokdbush');
-var cities = require('all-the-cities');
+const KDBush = require("kdbush");
+var geokdbush = require("geokdbush");
+var cities = require("all-the-cities");
 
 // Puppeteer methods
 async function getShipReports() {
-    const browser = await puppeteer.launch()
-    const page = await browser.newPage()
-    await page.goto('https://www.ndbc.noaa.gov/ship_obs.php?uom=E&time=2')
-    const values = await page.evaluate(()=>{
-        const values = []
-        document.querySelectorAll('#contentarea > pre > span').forEach(s => {values.push(s.textContent.split(/[ ,]+/))})
-        return values
-    })
+  // const browser = await puppeteer.launch();
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox"],
+  });
+  const page = await browser.newPage();
+  await page.goto("https://www.ndbc.noaa.gov/ship_obs.php?uom=E&time=2");
+  const values = await page.evaluate(() => {
+    const values = [];
+    document.querySelectorAll("#contentarea > pre > span").forEach((s) => {
+      values.push(s.textContent.split(/[ ,]+/));
+    });
+    return values;
+  });
 
-    const valuesDictionaries = []
-    var counter = 0
-    values.forEach(valuesArray => {
-        if(counter > 0){
-            valuesDictionaries.push(valuesToDictionary(valuesArray))
-        }
-        counter++
-    })
-    await browser.close()
-    return valuesDictionaries
+  const valuesDictionaries = [];
+  var counter = 0;
+  values.forEach((valuesArray) => {
+    if (counter > 0) {
+      valuesDictionaries.push(valuesToDictionary(valuesArray));
+    }
+    counter++;
+  });
+  await browser.close();
+  return valuesDictionaries;
 }
 
 async function getWindfinderWind(windfinderUrl, id) {
-    const browser = await puppeteer.launch()
-    const page = await browser.newPage()
-    await page.goto(windfinderUrl)
-    const token = await page.evaluate(()=>{
-        return API_TOKEN
-    })
-    await browser.close()
-    
-    const dataUrl = 'https://api.windfinder.com/v2/spots/' + id + '/reports/?limit=-1&timespan=last24h&step=1m&customer=wfweb&version=1.0&token=' + token
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+  await page.goto(windfinderUrl);
+  const token = await page.evaluate(() => {
+    return API_TOKEN;
+  });
+  await browser.close();
 
-    const reportData = await axios.get(dataUrl)
-    const reports = []
-    reportData.data.forEach(datum => {
-        const windSpeedKTS = datum.ws
-        const windGustKTS = datum.wg
-        const windDirectionDegrees = datum.wd
-        const atmosphericPressureMB = datum.ap
-        // TODO: what are these two times?
-        const time1 = datum.dtl
-        const time2 = datum.dtl_s
+  const dataUrl =
+    "https://api.windfinder.com/v2/spots/" +
+    id +
+    "/reports/?limit=-1&timespan=last24h&step=1m&customer=wfweb&version=1.0&token=" +
+    token;
 
-        reports.push({windSpeedKTS, windGustKTS, windDirectionDegrees, atmosphericPressureMB, time1, time2})
-    })
+  const reportData = await axios.get(dataUrl);
+  const reports = [];
+  reportData.data.forEach((datum) => {
+    const windSpeedKTS = datum.ws;
+    const windGustKTS = datum.wg;
+    const windDirectionDegrees = datum.wd;
+    const atmosphericPressureMB = datum.ap;
+    // TODO: what are these two times?
+    const time1 = datum.dtl;
+    const time2 = datum.dtl_s;
 
-    return reports
+    reports.push({
+      windSpeedKTS,
+      windGustKTS,
+      windDirectionDegrees,
+      atmosphericPressureMB,
+      time1,
+      time2,
+    });
+  });
+
+  return reports;
 }
 
-async function getSailflowWind(sailflowUrl){
-    // TODO: this is blocked for many non-pro stations.
-    const browser = await puppeteer.launch()
-    const page = await browser.newPage()
-    await page.goto(sailflowUrl)
-    const token = await page.evaluate(()=>{
-        return token
-    })
-    await browser.close()
-    const currentTimestamp = new Date().getTime()
-    const spotId = sailflowUrl.split('spot/')[1]
-    const url = 'https://api.weatherflow.com/wxengine/rest/graph/getGraph?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487'
-    //https://api.weatherflow.com/wxengine/rest/spot/getObservationSummary?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487
-    //https://api.weatherflow.com/wxengine/rest/stat/getSpotStats?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487
+async function getSailflowWind(sailflowUrl) {
+  // TODO: this is blocked for many non-pro stations.
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+  await page.goto(sailflowUrl);
+  const token = await page.evaluate(() => {
+    return token;
+  });
+  await browser.close();
+  const currentTimestamp = new Date().getTime();
+  const spotId = sailflowUrl.split("spot/")[1];
+  const url =
+    "https://api.weatherflow.com/wxengine/rest/graph/getGraph?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487";
+  //https://api.weatherflow.com/wxengine/rest/spot/getObservationSummary?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487
+  //https://api.weatherflow.com/wxengine/rest/stat/getSpotStats?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487
 
-    const data = await axios.get(url)
-    console.log(data.data)
+  const data = await axios.get(url);
+  console.log(data.data);
 }
 
-async function getNoaaBuoyWind(buoyUrl){
-    //https://www.ndbc.noaa.gov/data/realtime2/46232.txt
-    const station = buoyUrl.split('station=')[1]
-    const data = await axios.get('https://www.ndbc.noaa.gov/data/realtime2/' + station + '.txt')
-    const lines = data.data.split('\n')
-    const reports = []
-    for(var count = 0; count <= 11; count++){
-        // First two lines are column names and units.
-        if(count > 1){
-            const items = lines[count].split(/\s+/)
-            // https://www.ndbc.noaa.gov/measdes.shtml#stdmet
-            const year = items[0]
-            const month = items[1]
-            const day = items[2]
-            const hour = items[3]
-            const minute = items[4]
-            const windDirectionTrue = items[5]
-            const windSpeedMS = items[6]
-            const gustMS = items[7]
-            const waveHeightM = items[8]
-            const waveDirection = items[11]
-            const pressureHPA = items[12]
-            reports.push({year, month, day, hour, minute, windDirectionTrue, windSpeedMS, gustMS, pressureHPA})
-        }
+async function getNoaaBuoyWind(buoyUrl) {
+  //https://www.ndbc.noaa.gov/data/realtime2/46232.txt
+  const station = buoyUrl.split("station=")[1];
+  const data = await axios.get(
+    "https://www.ndbc.noaa.gov/data/realtime2/" + station + ".txt"
+  );
+  const lines = data.data.split("\n");
+  const reports = [];
+  for (var count = 0; count <= 11; count++) {
+    // First two lines are column names and units.
+    if (count > 1) {
+      const items = lines[count].split(/\s+/);
+      // https://www.ndbc.noaa.gov/measdes.shtml#stdmet
+      const year = items[0];
+      const month = items[1];
+      const day = items[2];
+      const hour = items[3];
+      const minute = items[4];
+      const windDirectionTrue = items[5];
+      const windSpeedMS = items[6];
+      const gustMS = items[7];
+      const waveHeightM = items[8];
+      const waveDirection = items[11];
+      const pressureHPA = items[12];
+      reports.push({
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        windDirectionTrue,
+        windSpeedMS,
+        gustMS,
+        pressureHPA,
+      });
     }
-    // TODO: filter out reports without windspeed and direction. 
-    return reports
+  }
+  // TODO: filter out reports without windspeed and direction.
+  return reports;
 }
 
-
-function format(valuesDictionary){
-    var count = 0
-    Object.keys(valuesDictionary).forEach(key => {
-        // Skip the first value since it's "ship"
-        if(count > 0){
-            try{
-                valuesDictionary[key] = parseFloat(valuesDictionary[key])
-            }catch(err){
-                valuesDictionary[key] = null
-            }
-            if(isNaN(valuesDictionary[key])){
-                valuesDictionary[key] = null
-            }
-        }
-        count++
-    })
+function format(valuesDictionary) {
+  var count = 0;
+  Object.keys(valuesDictionary).forEach((key) => {
+    // Skip the first value since it's "ship"
+    if (count > 0) {
+      try {
+        valuesDictionary[key] = parseFloat(valuesDictionary[key]);
+      } catch (err) {
+        valuesDictionary[key] = null;
+      }
+      if (isNaN(valuesDictionary[key])) {
+        valuesDictionary[key] = null;
+      }
+    }
+    count++;
+  });
 }
 
-function valuesToDictionary(values){
-    const valuesDictionary =  {source:values[0], hour:values[1],  lat:values[2], lon:values[3], twd_degrees:values[4], tws_kts:values[5], gust_kts:values[6], waveheight_ft:values[7]}
-    format(valuesDictionary)
-    return valuesDictionary
+function valuesToDictionary(values) {
+  const valuesDictionary = {
+    source: values[0],
+    hour: values[1],
+    lat: values[2],
+    lon: values[3],
+    twd_degrees: values[4],
+    tws_kts: values[5],
+    gust_kts: values[6],
+    waveheight_ft: values[7],
+  };
+  format(valuesDictionary);
+  return valuesDictionary;
 }
 
-function weatherSourceToFeatureCollection(sourceList){
-    const points = []
-    sourceList.forEach(p => {
-        const point = turf.point([p.lon, p.lat], p);
-        points.push(point)
-    })
-    return turf.featureCollection(points)
+// isNumber function copied from turfjs lib
+function isNumber(num) {
+  return !isNaN(num) && num !== null && !Array.isArray(num);
+}
+
+function weatherSourceToFeatureCollection(sourceList) {
+  const points = [];
+  sourceList.forEach((p) => {
+    /* 
+      // There's an error "coordinates must contain numbers" thrown each time because of this data:
+      {
+        source: 'SHIP',
+        hour: null,
+        lat: null,
+        lon: null,
+        twd_degrees: null,
+        tws_kts: null,
+        gust_kts: null,
+        waveheight_ft: null
+      }
+    */
+    if (isNumber(p.lon) && isNumber(p.lat)) {
+      const point = turf.point([p.lon, p.lat], p);
+      points.push(point);
+    }
+  });
+  return turf.featureCollection(points);
 }
 
 // We need both indices and feature collections.
-// Indices do extremely fast lookups for points, 
+// Indices do extremely fast lookups for points,
 // FeatureCollections help us find all points within a polygon.
-const pointSourcesToScrape = JSON.parse(fs.readFileSync('data/dynamic_weather_sources.json', 'utf-8'))
-var shipReportIndex = null
-const sailFlowSpotIndex = new KDBush(pointSourcesToScrape.SAILFLOW, (v) => v.lon, (v) => v.lat )
-const noaaBuoyIndex = new KDBush(pointSourcesToScrape.NOAA, (v) => v.lon, (v) => v.lat )
-const windfinderIndex = new KDBush(pointSourcesToScrape.WINDFINDER, (v) => v.lon, (v) => v.lat )
+const pointSourcesToScrape = JSON.parse(
+  fs.readFileSync("data/dynamic_weather_sources.json", "utf-8")
+);
+var shipReportIndex = null;
+const sailFlowSpotIndex = new KDBush(
+  pointSourcesToScrape.SAILFLOW,
+  (v) => v.lon,
+  (v) => v.lat
+);
+const noaaBuoyIndex = new KDBush(
+  pointSourcesToScrape.NOAA,
+  (v) => v.lon,
+  (v) => v.lat
+);
+const windfinderIndex = new KDBush(
+  pointSourcesToScrape.WINDFINDER,
+  (v) => v.lon,
+  (v) => v.lat
+);
 
-var shipReportsFeatureCollection = null
-const sailFlowSpotFeatureCollection = weatherSourceToFeatureCollection(pointSourcesToScrape.SAILFLOW)
-const noaaBuoyFeatureCollection = weatherSourceToFeatureCollection(pointSourcesToScrape.NOAA)
-const windfinderFeatureCollection = weatherSourceToFeatureCollection(pointSourcesToScrape.WINDFINDER)
-
-
+var shipReportsFeatureCollection = null;
+const sailFlowSpotFeatureCollection = weatherSourceToFeatureCollection(
+  pointSourcesToScrape.SAILFLOW
+);
+const noaaBuoyFeatureCollection = weatherSourceToFeatureCollection(
+  pointSourcesToScrape.NOAA
+);
+const windfinderFeatureCollection = weatherSourceToFeatureCollection(
+  pointSourcesToScrape.WINDFINDER
+);
 
 getShipReports().then((values) => {
-    shipReportIndex = new KDBush(values, (v) => v.lon, (v) => v.lat);
-    shipReportsFeatureCollection = weatherSourceToFeatureCollection(values)
-})
+  shipReportIndex = new KDBush(
+    values,
+    (v) => v.lon,
+    (v) => v.lat
+  );
+  shipReportsFeatureCollection = weatherSourceToFeatureCollection(values);
+  console.log(values);
+  fs.writeFileSync(
+    "shipReportsFeatureCollection.json",
+    JSON.stringify(shipReportsFeatureCollection)
+  );
+});
 
-function makeGeoJsons(csvData){
-    const lines = csvData.split('\n')
-    const timeToLevelToPoints = {}
-    const geoJsons = []
-    const indices = {}
-    lines.forEach(line => {
-        const lineComponents = line.split(',')
-        if(lineComponents.length == 7){
-            const time1 = lineComponents[0]
-            const time2 = lineComponents[1]
-    
-            const variable = lineComponents[2].replace(/"/gm, '')
-            const level = lineComponents[3]
-            const lonString = lineComponents[4]
-            const latString = lineComponents[5]
-            const pointHash = lonString+latString
+function makeGeoJsons(csvData) {
+  const lines = csvData.split("\n");
+  const timeToLevelToPoints = {};
+  const geoJsons = [];
+  const indices = {};
+  lines.forEach((line) => {
+    const lineComponents = line.split(",");
+    if (lineComponents.length == 7) {
+      const time1 = lineComponents[0];
+      const time2 = lineComponents[1];
 
-            const lon = parseFloat(lineComponents[4])
-            const lat = parseFloat(lineComponents[5])
-            const value = parseFloat(lineComponents[6])
+      const variable = lineComponents[2].replace(/"/gm, "");
+      const level = lineComponents[3];
+      const lonString = lineComponents[4];
+      const latString = lineComponents[5];
+      const pointHash = lonString + latString;
 
-            if(timeToLevelToPoints[time1] === undefined){
-                timeToLevelToPoints[time1] = {}
-                indices[time1] = {}
-            }
+      const lon = parseFloat(lineComponents[4]);
+      const lat = parseFloat(lineComponents[5]);
+      const value = parseFloat(lineComponents[6]);
 
+      if (timeToLevelToPoints[time1] === undefined) {
+        timeToLevelToPoints[time1] = {};
+        indices[time1] = {};
+      }
 
-            if(timeToLevelToPoints[time1][level] === undefined){
-                timeToLevelToPoints[time1][level] = {}
-            }
-            
-            if(timeToLevelToPoints[time1][level][pointHash] === undefined){
-                timeToLevelToPoints[time1][level][pointHash] = {lat:lat, lon:lon}
-            }
-            timeToLevelToPoints[time1][level][pointHash][variable] = value  
-        }
-    })
-    
-    Object.keys(timeToLevelToPoints).forEach(time => {
-        Object.keys(timeToLevelToPoints[time]).forEach(level => {
-            const geoJsonPoints = []
-            const points = []
-            Object.values(timeToLevelToPoints[time][level]).forEach(p => {
-                try{
-                    const geoJsonPoint = turf.point([p.lon, p.lat], p)
-                    geoJsonPoints.push(geoJsonPoint)
-                    points.push(p)
-                }catch(err){
+      if (timeToLevelToPoints[time1][level] === undefined) {
+        timeToLevelToPoints[time1][level] = {};
+      }
 
-                }
-            })
+      if (timeToLevelToPoints[time1][level][pointHash] === undefined) {
+        timeToLevelToPoints[time1][level][pointHash] = { lat: lat, lon: lon };
+      }
+      timeToLevelToPoints[time1][level][pointHash][variable] = value;
+    }
+  });
 
-            const index = new KDBush(points, (v) => v.lon, (v) => v.lat )
-            indices[time][level] = index
-            const geoJson = turf.featureCollection(geoJsonPoints)
-            geoJson.properties = {level:level.replace(/"/gm, ''), time:time.replace(/"/gm, '')}
-            geoJsons.push(geoJson)
-        })
-    })
-    return {geoJsons:geoJsons, indices:indices}
+  Object.keys(timeToLevelToPoints).forEach((time) => {
+    Object.keys(timeToLevelToPoints[time]).forEach((level) => {
+      const geoJsonPoints = [];
+      const points = [];
+      Object.values(timeToLevelToPoints[time][level]).forEach((p) => {
+        try {
+          const geoJsonPoint = turf.point([p.lon, p.lat], p);
+          geoJsonPoints.push(geoJsonPoint);
+          points.push(p);
+        } catch (err) {}
+      });
+
+      const index = new KDBush(
+        points,
+        (v) => v.lon,
+        (v) => v.lat
+      );
+      indices[time][level] = index;
+      const geoJson = turf.featureCollection(geoJsonPoints);
+      geoJson.properties = {
+        level: level.replace(/"/gm, ""),
+        time: time.replace(/"/gm, ""),
+      };
+      geoJsons.push(geoJson);
+    });
+  });
+  return { geoJsons: geoJsons, indices: indices };
 }
 
-function sliceGribByRegion(roi, filename, model){
-    // TODO: get spatial bounds from roi.
-    const leftLon = -123.6621
-    const rightLon = -121.3303
-    const topLat = 38.6898
-    const bottomLat = 37.2347
+function sliceGribByRegion(roi, filename, model) {
+  // TODO: get spatial bounds from roi.
+  const leftLon = -123.6621;
+  const rightLon = -121.3303;
+  const topLat = 38.6898;
+  const bottomLat = 37.2347;
 
-    execSync('wgrib2 ' + filename + ' -small_grib ' + leftLon +':' + rightLon + ' ' + bottomLat + ':' + topLat + ' small_grib.grib2')
-    //execSync('rm ' + filename)
-    execSync('wgrib2 small_grib.grib2 -csv grib.csv')
-    //execSync('rm small_grib.grib2')
-    const csvData = fs.readFileSync('grib.csv', 'utf-8')
-    const parsedData = makeGeoJsons(csvData)
-    const geoJsons = parsedData.geoJsons
-    const indicies = parsedData.indices
+  execSync(
+    "wgrib2 " +
+      filename +
+      " -small_grib " +
+      leftLon +
+      ":" +
+      rightLon +
+      " " +
+      bottomLat +
+      ":" +
+      topLat +
+      " small_grib.grib2"
+  );
+  //execSync('rm ' + filename)
+  execSync("wgrib2 small_grib.grib2 -csv grib.csv");
+  //execSync('rm small_grib.grib2')
+  const csvData = fs.readFileSync("grib.csv", "utf-8");
+  const parsedData = makeGeoJsons(csvData);
+  const geoJsons = parsedData.geoJsons;
+  const indicies = parsedData.indices;
 
-    var counter = 0
-    geoJsons.forEach(geoJson => {
-        if(geoJson.properties.level === '10 m above ground' || geoJson.properties.level === 'surface'){
-            fs.writeFileSync(counter.toString() +  '.json', JSON.stringify(geoJson))
-            counter++
-        }
-      
-    })
-
+  var counter = 0;
+  geoJsons.forEach((geoJson) => {
+    if (
+      geoJson.properties.level === "10 m above ground" ||
+      geoJson.properties.level === "surface"
+    ) {
+      fs.writeFileSync(counter.toString() + ".json", JSON.stringify(geoJson));
+      counter++;
+    }
+  });
 }
 
 // roi: region of interest (polygon)
-function getArchivedDated(roi, startTime, endTime){
-    /** TODO
-     *      a) Check size of roi and react accordingly. Maybe we need a util to calculate sizes of things and adjust our approach accordingly. Maybe we need a way to just determine is roi oceanic or local.
-     *      b) Query PostGIS for space and time boundaries to get a list of s3 files.
-     *      c) Download said s3 files. 
-     *      d) Slice GRIBs into regions using wgrib2 or cdo, then convert to geojson and (either upload gribs and geojson to s3 and save the record or send this info to the analysis engine so it can do it).
-     *      e) Return with a either a list of sliced files in an s3 bucket just for sliced data, or actually return the geojson objects with time and boundary info. 
-     */
+function getArchivedDated(roi, startTime, endTime) {
+  /** TODO
+   *      a) Check size of roi and react accordingly. Maybe we need a util to calculate sizes of things and adjust our approach accordingly. Maybe we need a way to just determine is roi oceanic or local.
+   *      b) Query PostGIS for space and time boundaries to get a list of s3 files.
+   *      c) Download said s3 files.
+   *      d) Slice GRIBs into regions using wgrib2 or cdo, then convert to geojson and (either upload gribs and geojson to s3 and save the record or send this info to the analysis engine so it can do it).
+   *      e) Return with a either a list of sliced files in an s3 bucket just for sliced data, or actually return the geojson objects with time and boundary info.
+   */
 }
 
-function processRegionRequest(roi, startTimeUnixMS, endTimeUnixMS, webhook, webhookToken, updateFrequencyMinutes){
-    // TODO: Figure out where to do the actual Puppeteer scraping.
+function processRegionRequest(
+  roi,
+  startTimeUnixMS,
+  endTimeUnixMS,
+  webhook,
+  webhookToken,
+  updateFrequencyMinutes
+) {
+  // TODO: Figure out where to do the actual Puppeteer scraping.
 
-    //const archivedData = getArchivedData(roi, startTimeUnixMS, endTimeUnixMS)
-    const containedShipReports = turf.pointsWithinPolygon(shipReportsFeatureCollection, roi)
-    const containedNoaaBuoys = turf.pointsWithinPolygon(noaaBuoyFeatureCollection, roi)
-    const containedSailflowSpots = turf.pointsWithinPolygon(sailFlowSpotFeatureCollection, roi)
-    const containedWindfinderPoints = turf.pointsWithinPolygon(windfinderFeatureCollection, roi)
-
+  //const archivedData = getArchivedData(roi, startTimeUnixMS, endTimeUnixMS)
+  const containedShipReports = turf.pointsWithinPolygon(
+    shipReportsFeatureCollection,
+    roi
+  );
+  const containedNoaaBuoys = turf.pointsWithinPolygon(
+    noaaBuoyFeatureCollection,
+    roi
+  );
+  const containedSailflowSpots = turf.pointsWithinPolygon(
+    sailFlowSpotFeatureCollection,
+    roi
+  );
+  const containedWindfinderPoints = turf.pointsWithinPolygon(
+    windfinderFeatureCollection,
+    roi
+  );
 }
 
-function processPointRequest(point, time, webhook, webhookToken){
-    // TODO;
+function processPointRequest(point, time, webhook, webhookToken) {
+  // TODO;
 }
 
 // const wss = new WebSocket.Server({
@@ -321,39 +439,42 @@ function processPointRequest(point, time, webhook, webhookToken){
 //     }
 // });
 
-
 // wss.on('connection', function connection(ws) {
 //     console.log('SERVER: connected')
-    
+
 //     ws.on('close', function close() {
-    
+
 //     })
 
 //     ws.on('message', function incoming(data) {
-        
+
 //     })
 // })
 
-const app = express()
-const port = 3000
+const app = express();
+const port = 3000;
 app.use(express.json());
 
-app.post('/', function(request, response){
-    
-    const roi = request.body.roi
-    const startTimeUnixMS = request.body.startTimeUnixMS
-    const endTimeUnixMS = request.body.endTimeUnixMS
-    // Where should we send the data?
-    const webhook = request.body.webhook
-    const webhookToken = request.body.webhookToken
+app.post("/", function (request, response) {
+  const roi = request.body.roi;
+  const startTimeUnixMS = request.body.startTimeUnixMS;
+  const endTimeUnixMS = request.body.endTimeUnixMS;
+  // Where should we send the data?
+  const webhook = request.body.webhook;
+  const webhookToken = request.body.webhookToken;
 
-    // How often should we check the real time sources for new data?
-    const updateFrequencyMinutes = request.body.updateFrequencyMinutes
+  // How often should we check the real time sources for new data?
+  const updateFrequencyMinutes = request.body.updateFrequencyMinutes;
 
-    processRequest(roi, startTimeUnixMS, endTimeUnixMS, webhook, webhookToken, updateFrequencyMinutes)
-
-
+  processRequest(
+    roi,
+    startTimeUnixMS,
+    endTimeUnixMS,
+    webhook,
+    webhookToken,
+    updateFrequencyMinutes
+  );
 });
 app.listen(port, () => {
-  console.log(`Example app listening at http://localhost:${port}`)
-})
+  console.log(`Example app listening at http://localhost:${port}`);
+});
