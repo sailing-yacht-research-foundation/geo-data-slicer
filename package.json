@@ -24,6 +24,9 @@
     "express": "^4.17.1",
     "geokdbush": "^1.1.0",
     "kdbush": "^3.0.0",
-    "puppeteer": "^10.0.0"
+    "pg": "^8.6.0",
+    "pg-hstore": "^2.3.4",
+    "puppeteer": "^10.0.0",
+    "sequelize": "^6.6.4"
   }
 }

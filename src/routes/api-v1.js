@@ -2,10 +2,11 @@ const express = require("express");
 const turf = require("@turf/turf");
 
 const processRegionRequest = require("../services/processRegionRequest");
+const getArchivedData = require("../services/getArchivedData");
 var router = express.Router();
 
-router.get("/test", async function (req, res) {
-  res.json({
+router.get("/test", async function (request, response) {
+  response.json({
     message: "This is a test url",
   });
 });
@@ -29,7 +30,7 @@ router.post("/", async function (request, response) {
     webhookToken,
     updateFrequencyMinutes
   );
-  res.send("ok");
+  response.send("ok");
 });
 
 router.get("/temp", async function (request, response) {
@@ -43,8 +44,13 @@ router.get("/temp", async function (request, response) {
       [-16.5234375, 52.93539665862318],
     ],
   ]);
-  processRegionRequest(roi, 0, 0, "", "", 1);
-  res.send("ok");
+  const startTime = new Date("2021-06-17T17:00:00+0000").getTime();
+  const endTime = new Date("2021-06-17T19:00:00+0000").getTime();
+  //   console.log(roi.geometry.coordinates[0][0]);
+  // response.json({ startTime, endTime });
+  const result = await getArchivedData(roi, startTime, endTime);
+  response.json({ result });
+  //   res.send("ok");
 });
 
 module.exports = router;
