@@ -44,12 +44,3 @@ async function processRegionRequest(
 }
 
 module.exports = processRegionRequest;
-
-var myHTML = `<html>
-<head></head>
-<body>Ini invoice saya, invoice No. ${invoiceNo} 
-<table>
-    <tr>
-        <td>${item}</td>
-    </tr>
-</table></body></html>`;
