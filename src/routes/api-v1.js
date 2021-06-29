@@ -1,10 +1,9 @@
 const express = require("express");
 const turf = require("@turf/turf");
-const path = require("path");
 
 const processRegionRequest = require("../services/processRegionRequest");
 const getArchivedData = require("../services/getArchivedData");
-const downloadFromS3 = require("../utils/downloadFromS3");
+const sliceGribByRegion = require("../utils/sliceGribByRegion");
 
 var router = express.Router();
 
@@ -47,23 +46,11 @@ router.get("/temp", async function (request, response) {
       [-16.5234375, 52.93539665862318],
     ],
   ]);
-  const startTime = new Date("2021-06-17T17:00:00+0000").getTime();
-  const endTime = new Date("2021-06-17T19:00:00+0000").getTime();
-  //   console.log(roi.geometry.coordinates[0][0]);
-  // response.json({ startTime, endTime });
+  const startTime = new Date("2021-06-29T17:00:00+0000").getTime();
+  const endTime = new Date("2021-06-29T18:00:00+0000").getTime();
   const result = await getArchivedData(roi, startTime, endTime);
   response.json({ result });
   //   res.send("ok");
-});
-
-router.get("/dl", async function (request, response) {
-  const prom = downloadFromS3(
-    "",
-    path.resolve(__dirname, "../../download.grib2")
-  );
-  console.log(prom);
-  await prom;
-  response.send("ok");
 });
 
 module.exports = router;

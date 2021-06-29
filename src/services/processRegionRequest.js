@@ -1,4 +1,5 @@
 const turf = require("@turf/turf");
+const axios = require("axios");
 
 const {
   sailFlowSpotFeatureCollection,
@@ -23,7 +24,13 @@ async function processRegionRequest(
     startTimeUnixMS,
     endTimeUnixMS
   );
-  console.log(archivedData);
+  await axios({
+    url: webhook,
+    method: "POST",
+    data: {
+      archivedData,
+    },
+  });
   const { shipReportsFeatureCollection } = await createShipReport();
   const containedShipReports = turf.pointsWithinPolygon(
     shipReportsFeatureCollection,
