@@ -1,8 +1,11 @@
 const express = require("express");
 const turf = require("@turf/turf");
+const path = require("path");
 
 const processRegionRequest = require("../services/processRegionRequest");
 const getArchivedData = require("../services/getArchivedData");
+const downloadFromS3 = require("../utils/downloadFromS3");
+
 var router = express.Router();
 
 router.get("/test", async function (request, response) {
@@ -51,6 +54,16 @@ router.get("/temp", async function (request, response) {
   const result = await getArchivedData(roi, startTime, endTime);
   response.json({ result });
   //   res.send("ok");
+});
+
+router.get("/dl", async function (request, response) {
+  const prom = downloadFromS3(
+    "",
+    path.resolve(__dirname, "../../download.grib2")
+  );
+  console.log(prom);
+  await prom;
+  response.send("ok");
 });
 
 module.exports = router;
