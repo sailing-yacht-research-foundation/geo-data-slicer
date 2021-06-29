@@ -28,6 +28,7 @@
     "kdbush": "^3.0.0",
     "pg": "^8.6.0",
     "pg-hstore": "^2.3.4",
+    "prettier": "^2.3.2",
     "puppeteer": "^10.0.0",
     "sequelize": "^6.6.4"
   }

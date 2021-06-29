@@ -15,30 +15,30 @@
  * We need to figure out how a request should work.
  */
 
-var express = require("express");
-const puppeteer = require("puppeteer");
-const execSync = require("child_process").execSync;
-const turf = require("@turf/turf");
-const axios = require("axios").default;
-const ws = require("ws");
-const fs = require("fs");
+var express = require('express');
+const puppeteer = require('puppeteer');
+const execSync = require('child_process').execSync;
+const turf = require('@turf/turf');
+const axios = require('axios').default;
+const ws = require('ws');
+const fs = require('fs');
 
-const KDBush = require("kdbush");
-var geokdbush = require("geokdbush");
-var cities = require("all-the-cities");
+const KDBush = require('kdbush');
+var geokdbush = require('geokdbush');
+var cities = require('all-the-cities');
 
 // Puppeteer methods
 async function getShipReports() {
   // const browser = await puppeteer.launch();
   const browser = await puppeteer.launch({
     headless: true,
-    args: ["--no-sandbox"],
+    args: ['--no-sandbox'],
   });
   const page = await browser.newPage();
-  await page.goto("https://www.ndbc.noaa.gov/ship_obs.php?uom=E&time=2");
+  await page.goto('https://www.ndbc.noaa.gov/ship_obs.php?uom=E&time=2');
   const values = await page.evaluate(() => {
     const values = [];
-    document.querySelectorAll("#contentarea > pre > span").forEach((s) => {
+    document.querySelectorAll('#contentarea > pre > span').forEach((s) => {
       values.push(s.textContent.split(/[ ,]+/));
     });
     return values;
@@ -66,9 +66,9 @@ async function getWindfinderWind(windfinderUrl, id) {
   await browser.close();
 
   const dataUrl =
-    "https://api.windfinder.com/v2/spots/" +
+    'https://api.windfinder.com/v2/spots/' +
     id +
-    "/reports/?limit=-1&timespan=last24h&step=1m&customer=wfweb&version=1.0&token=" +
+    '/reports/?limit=-1&timespan=last24h&step=1m&customer=wfweb&version=1.0&token=' +
     token;
 
   const reportData = await axios.get(dataUrl);
@@ -105,9 +105,9 @@ async function getSailflowWind(sailflowUrl) {
   });
   await browser.close();
   const currentTimestamp = new Date().getTime();
-  const spotId = sailflowUrl.split("spot/")[1];
+  const spotId = sailflowUrl.split('spot/')[1];
   const url =
-    "https://api.weatherflow.com/wxengine/rest/graph/getGraph?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487";
+    'https://api.weatherflow.com/wxengine/rest/graph/getGraph?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487';
   //https://api.weatherflow.com/wxengine/rest/spot/getObservationSummary?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487
   //https://api.weatherflow.com/wxengine/rest/stat/getSpotStats?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487
 
@@ -117,11 +117,11 @@ async function getSailflowWind(sailflowUrl) {
 
 async function getNoaaBuoyWind(buoyUrl) {
   //https://www.ndbc.noaa.gov/data/realtime2/46232.txt
-  const station = buoyUrl.split("station=")[1];
+  const station = buoyUrl.split('station=')[1];
   const data = await axios.get(
-    "https://www.ndbc.noaa.gov/data/realtime2/" + station + ".txt"
+    'https://www.ndbc.noaa.gov/data/realtime2/' + station + '.txt',
   );
-  const lines = data.data.split("\n");
+  const lines = data.data.split('\n');
   const reports = [];
   for (var count = 0; count <= 11; count++) {
     // First two lines are column names and units.
@@ -222,62 +222,62 @@ function weatherSourceToFeatureCollection(sourceList) {
 // Indices do extremely fast lookups for points,
 // FeatureCollections help us find all points within a polygon.
 const pointSourcesToScrape = JSON.parse(
-  fs.readFileSync("data/dynamic_weather_sources.json", "utf-8")
+  fs.readFileSync('data/dynamic_weather_sources.json', 'utf-8'),
 );
 var shipReportIndex = null;
 const sailFlowSpotIndex = new KDBush(
   pointSourcesToScrape.SAILFLOW,
   (v) => v.lon,
-  (v) => v.lat
+  (v) => v.lat,
 );
 const noaaBuoyIndex = new KDBush(
   pointSourcesToScrape.NOAA,
   (v) => v.lon,
-  (v) => v.lat
+  (v) => v.lat,
 );
 const windfinderIndex = new KDBush(
   pointSourcesToScrape.WINDFINDER,
   (v) => v.lon,
-  (v) => v.lat
+  (v) => v.lat,
 );
 
 var shipReportsFeatureCollection = null;
 const sailFlowSpotFeatureCollection = weatherSourceToFeatureCollection(
-  pointSourcesToScrape.SAILFLOW
+  pointSourcesToScrape.SAILFLOW,
 );
 const noaaBuoyFeatureCollection = weatherSourceToFeatureCollection(
-  pointSourcesToScrape.NOAA
+  pointSourcesToScrape.NOAA,
 );
 const windfinderFeatureCollection = weatherSourceToFeatureCollection(
-  pointSourcesToScrape.WINDFINDER
+  pointSourcesToScrape.WINDFINDER,
 );
 
 getShipReports().then((values) => {
   shipReportIndex = new KDBush(
     values,
     (v) => v.lon,
-    (v) => v.lat
+    (v) => v.lat,
   );
   shipReportsFeatureCollection = weatherSourceToFeatureCollection(values);
   console.log(values);
   fs.writeFileSync(
-    "shipReportsFeatureCollection.json",
-    JSON.stringify(shipReportsFeatureCollection)
+    'shipReportsFeatureCollection.json',
+    JSON.stringify(shipReportsFeatureCollection),
   );
 });
 
 function makeGeoJsons(csvData) {
-  const lines = csvData.split("\n");
+  const lines = csvData.split('\n');
   const timeToLevelToPoints = {};
   const geoJsons = [];
   const indices = {};
   lines.forEach((line) => {
-    const lineComponents = line.split(",");
+    const lineComponents = line.split(',');
     if (lineComponents.length == 7) {
       const time1 = lineComponents[0];
       const time2 = lineComponents[1];
 
-      const variable = lineComponents[2].replace(/"/gm, "");
+      const variable = lineComponents[2].replace(/"/gm, '');
       const level = lineComponents[3];
       const lonString = lineComponents[4];
       const latString = lineComponents[5];
@@ -318,13 +318,13 @@ function makeGeoJsons(csvData) {
       const index = new KDBush(
         points,
         (v) => v.lon,
-        (v) => v.lat
+        (v) => v.lat,
       );
       indices[time][level] = index;
       const geoJson = turf.featureCollection(geoJsonPoints);
       geoJson.properties = {
-        level: level.replace(/"/gm, ""),
-        time: time.replace(/"/gm, ""),
+        level: level.replace(/"/gm, ''),
+        time: time.replace(/"/gm, ''),
       };
       geoJsons.push(geoJson);
     });
@@ -340,22 +340,22 @@ function sliceGribByRegion(roi, filename, model) {
   const bottomLat = 37.2347;
 
   execSync(
-    "wgrib2 " +
+    'wgrib2 ' +
       filename +
-      " -small_grib " +
+      ' -small_grib ' +
       leftLon +
-      ":" +
+      ':' +
       rightLon +
-      " " +
+      ' ' +
       bottomLat +
-      ":" +
+      ':' +
       topLat +
-      " small_grib.grib2"
+      ' small_grib.grib2',
   );
   //execSync('rm ' + filename)
-  execSync("wgrib2 small_grib.grib2 -csv grib.csv");
+  execSync('wgrib2 small_grib.grib2 -csv grib.csv');
   //execSync('rm small_grib.grib2')
-  const csvData = fs.readFileSync("grib.csv", "utf-8");
+  const csvData = fs.readFileSync('grib.csv', 'utf-8');
   const parsedData = makeGeoJsons(csvData);
   const geoJsons = parsedData.geoJsons;
   const indicies = parsedData.indices;
@@ -363,10 +363,10 @@ function sliceGribByRegion(roi, filename, model) {
   var counter = 0;
   geoJsons.forEach((geoJson) => {
     if (
-      geoJson.properties.level === "10 m above ground" ||
-      geoJson.properties.level === "surface"
+      geoJson.properties.level === '10 m above ground' ||
+      geoJson.properties.level === 'surface'
     ) {
-      fs.writeFileSync(counter.toString() + ".json", JSON.stringify(geoJson));
+      fs.writeFileSync(counter.toString() + '.json', JSON.stringify(geoJson));
       counter++;
     }
   });
@@ -389,26 +389,26 @@ function processRegionRequest(
   endTimeUnixMS,
   webhook,
   webhookToken,
-  updateFrequencyMinutes
+  updateFrequencyMinutes,
 ) {
   // TODO: Figure out where to do the actual Puppeteer scraping.
 
   //const archivedData = getArchivedData(roi, startTimeUnixMS, endTimeUnixMS)
   const containedShipReports = turf.pointsWithinPolygon(
     shipReportsFeatureCollection,
-    roi
+    roi,
   );
   const containedNoaaBuoys = turf.pointsWithinPolygon(
     noaaBuoyFeatureCollection,
-    roi
+    roi,
   );
   const containedSailflowSpots = turf.pointsWithinPolygon(
     sailFlowSpotFeatureCollection,
-    roi
+    roi,
   );
   const containedWindfinderPoints = turf.pointsWithinPolygon(
     windfinderFeatureCollection,
-    roi
+    roi,
   );
 }
 
@@ -455,7 +455,7 @@ const app = express();
 const port = 3000;
 app.use(express.json());
 
-app.post("/", function (request, response) {
+app.post('/', function (request, response) {
   const roi = request.body.roi;
   const startTimeUnixMS = request.body.startTimeUnixMS;
   const endTimeUnixMS = request.body.endTimeUnixMS;
@@ -472,7 +472,7 @@ app.post("/", function (request, response) {
     endTimeUnixMS,
     webhook,
     webhookToken,
-    updateFrequencyMinutes
+    updateFrequencyMinutes,
   );
 });
 app.listen(port, () => {
