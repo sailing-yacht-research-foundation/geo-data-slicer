@@ -44,7 +44,8 @@ function makeGeoJsons(csvData) {
       const points = [];
       Object.values(timeToLevelToPoints[time][level]).forEach((p) => {
         try {
-          const geoJsonPoint = turf.point([p.lon, p.lat], p);
+          const { lon, lat, ...otherProps } = p;
+          const geoJsonPoint = turf.point([p.lon, p.lat], otherProps);
           geoJsonPoints.push(geoJsonPoint);
           points.push(p);
         } catch (err) {}
