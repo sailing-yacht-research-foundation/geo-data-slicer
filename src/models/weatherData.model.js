@@ -1,6 +1,6 @@
 module.exports = (sequelize, Sequelize) => {
   const weatherData = sequelize.define(
-    "WeatherDatas",
+    'WeatherDatas',
     {
       id: {
         type: Sequelize.UUID,
@@ -29,19 +29,19 @@ module.exports = (sequelize, Sequelize) => {
       },
     },
     {
-      tableName: "WeatherDatas",
+      tableName: 'WeatherDatas',
       timestamps: false,
       indexes: [
         {
           unique: false,
-          fields: ["start_time"],
+          fields: ['start_time'],
         },
         {
           unique: false,
-          fields: ["end_time"],
+          fields: ['end_time'],
         },
       ],
-    }
+    },
   );
 
   return weatherData;

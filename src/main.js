@@ -1,9 +1,9 @@
-require("dotenv").config();
+require('dotenv').config();
 
-const db = require("./models");
-const { createShipReport } = require("./services/featureCollections");
+const db = require('./models');
+const { createShipReport } = require('./services/featureCollections');
 
-const createServer = require("./server");
+const createServer = require('./server');
 const port = process.env.PORT || 3000;
 
 (async () => {

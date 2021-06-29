@@ -1,8 +1,8 @@
-const fs = require("fs");
-const execSync = require("child_process").execSync;
-const turf = require("@turf/turf");
+const fs = require('fs');
+const execSync = require('child_process').execSync;
+const turf = require('@turf/turf');
 
-const makeGeoJsons = require("./makeGeoJsons");
+const makeGeoJsons = require('./makeGeoJsons');
 
 function sliceGribByRegion(roi, filename, options) {
   // TODO: Does different model have different ways to slice? Need to check
@@ -14,24 +14,24 @@ function sliceGribByRegion(roi, filename, options) {
   const topLat = bbox[3];
 
   execSync(
-    "wgrib2 " +
+    'wgrib2 ' +
       filename +
-      " -small_grib " +
+      ' -small_grib ' +
       leftLon +
-      ":" +
+      ':' +
       rightLon +
-      " " +
+      ' ' +
       bottomLat +
-      ":" +
+      ':' +
       topLat +
-      ` ${folder}/small_${fileID}.grib2`
+      ` ${folder}/small_${fileID}.grib2`,
   );
   execSync(`rm ${filename}`);
   execSync(
-    `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`
+    `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
   );
   execSync(`rm ${folder}/small_${fileID}.grib2`);
-  const csvData = fs.readFileSync(`${folder}/${fileID}.csv`, "utf-8");
+  const csvData = fs.readFileSync(`${folder}/${fileID}.csv`, 'utf-8');
   execSync(`rm ${folder}/${fileID}.csv`);
   const parsedData = makeGeoJsons(csvData);
   const geoJsons = parsedData.geoJsons;

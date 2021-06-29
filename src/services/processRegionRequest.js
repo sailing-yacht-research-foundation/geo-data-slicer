@@ -1,13 +1,13 @@
-const turf = require("@turf/turf");
-const axios = require("axios");
+const turf = require('@turf/turf');
+const axios = require('axios');
 
 const {
   sailFlowSpotFeatureCollection,
   noaaBuoyFeatureCollection,
   windfinderFeatureCollection,
   createShipReport,
-} = require("./featureCollections");
-const getArchivedData = require("./getArchivedData");
+} = require('./featureCollections');
+const getArchivedData = require('./getArchivedData');
 
 async function processRegionRequest(
   roi,
@@ -15,18 +15,18 @@ async function processRegionRequest(
   endTimeUnixMS,
   webhook,
   webhookToken,
-  updateFrequencyMinutes
+  updateFrequencyMinutes,
 ) {
   // TODO: Figure out where to do the actual Puppeteer scraping.
 
   const archivedData = await getArchivedData(
     roi,
     startTimeUnixMS,
-    endTimeUnixMS
+    endTimeUnixMS,
   );
   await axios({
     url: webhook,
-    method: "POST",
+    method: 'POST',
     data: {
       archivedData,
     },
@@ -34,19 +34,19 @@ async function processRegionRequest(
   const { shipReportsFeatureCollection } = await createShipReport();
   const containedShipReports = turf.pointsWithinPolygon(
     shipReportsFeatureCollection,
-    roi
+    roi,
   );
   const containedNoaaBuoys = turf.pointsWithinPolygon(
     noaaBuoyFeatureCollection,
-    roi
+    roi,
   );
   const containedSailflowSpots = turf.pointsWithinPolygon(
     sailFlowSpotFeatureCollection,
-    roi
+    roi,
   );
   const containedWindfinderPoints = turf.pointsWithinPolygon(
     windfinderFeatureCollection,
-    roi
+    roi,
   );
 }
 

@@ -1,42 +1,42 @@
-const path = require("path");
-const fs = require("fs");
-const puppeteer = require("puppeteer");
-const KDBush = require("kdbush");
+const path = require('path');
+const fs = require('fs');
+const puppeteer = require('puppeteer');
+const KDBush = require('kdbush');
 
-const weatherSourceToFeatureCollection = require("../utils/weatherSourceToFeatureCollection");
-const valuesToDictionary = require("../utils/valuesToDictionary");
+const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
+const valuesToDictionary = require('../utils/valuesToDictionary');
 
 const pointSourcesToScrape = JSON.parse(
   fs.readFileSync(
-    path.resolve(__dirname, "../../data/dynamic_weather_sources.json"),
-    "utf-8"
-  )
+    path.resolve(__dirname, '../../data/dynamic_weather_sources.json'),
+    'utf-8',
+  ),
 );
 
 const sailFlowSpotIndex = new KDBush(
   pointSourcesToScrape.SAILFLOW,
   (v) => v.lon,
-  (v) => v.lat
+  (v) => v.lat,
 );
 const noaaBuoyIndex = new KDBush(
   pointSourcesToScrape.NOAA,
   (v) => v.lon,
-  (v) => v.lat
+  (v) => v.lat,
 );
 const windfinderIndex = new KDBush(
   pointSourcesToScrape.WINDFINDER,
   (v) => v.lon,
-  (v) => v.lat
+  (v) => v.lat,
 );
 
 const sailFlowSpotFeatureCollection = weatherSourceToFeatureCollection(
-  pointSourcesToScrape.SAILFLOW
+  pointSourcesToScrape.SAILFLOW,
 );
 const noaaBuoyFeatureCollection = weatherSourceToFeatureCollection(
-  pointSourcesToScrape.NOAA
+  pointSourcesToScrape.NOAA,
 );
 const windfinderFeatureCollection = weatherSourceToFeatureCollection(
-  pointSourcesToScrape.WINDFINDER
+  pointSourcesToScrape.WINDFINDER,
 );
 
 // Puppeteer methods
@@ -44,13 +44,13 @@ async function getShipReports() {
   // const browser = await puppeteer.launch();
   const browser = await puppeteer.launch({
     headless: true,
-    args: ["--no-sandbox"],
+    args: ['--no-sandbox'],
   });
   const page = await browser.newPage();
-  await page.goto("https://www.ndbc.noaa.gov/ship_obs.php?uom=E&time=2");
+  await page.goto('https://www.ndbc.noaa.gov/ship_obs.php?uom=E&time=2');
   const values = await page.evaluate(() => {
     const values = [];
-    document.querySelectorAll("#contentarea > pre > span").forEach((s) => {
+    document.querySelectorAll('#contentarea > pre > span').forEach((s) => {
       values.push(s.textContent.split(/[ ,]+/));
     });
     return values;
@@ -78,9 +78,9 @@ async function getWindfinderWind(windfinderUrl, id) {
   await browser.close();
 
   const dataUrl =
-    "https://api.windfinder.com/v2/spots/" +
+    'https://api.windfinder.com/v2/spots/' +
     id +
-    "/reports/?limit=-1&timespan=last24h&step=1m&customer=wfweb&version=1.0&token=" +
+    '/reports/?limit=-1&timespan=last24h&step=1m&customer=wfweb&version=1.0&token=' +
     token;
 
   const reportData = await axios.get(dataUrl);
@@ -117,9 +117,9 @@ async function getSailflowWind(sailflowUrl) {
   });
   await browser.close();
   const currentTimestamp = new Date().getTime();
-  const spotId = sailflowUrl.split("spot/")[1];
+  const spotId = sailflowUrl.split('spot/')[1];
   const url =
-    "https://api.weatherflow.com/wxengine/rest/graph/getGraph?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487";
+    'https://api.weatherflow.com/wxengine/rest/graph/getGraph?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487';
   //https://api.weatherflow.com/wxengine/rest/spot/getObservationSummary?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487
   //https://api.weatherflow.com/wxengine/rest/stat/getSpotStats?callback=jQuery172021690568611973737_1624546247136&units_wind=mph&units_temp=f&units_distance=mi&fields=wind&format=json&null_ob_min_from_now=60&show_virtual_obs=true&spot_id=1790&time_start_offset_hours=-4&time_end_offset_hours=0&type=dataonly&model_ids=-101&wf_token=e98555ab5750420706ecc152a031d53f&_=1624546247487
 
@@ -129,11 +129,11 @@ async function getSailflowWind(sailflowUrl) {
 
 async function getNoaaBuoyWind(buoyUrl) {
   //https://www.ndbc.noaa.gov/data/realtime2/46232.txt
-  const station = buoyUrl.split("station=")[1];
+  const station = buoyUrl.split('station=')[1];
   const data = await axios.get(
-    "https://www.ndbc.noaa.gov/data/realtime2/" + station + ".txt"
+    'https://www.ndbc.noaa.gov/data/realtime2/' + station + '.txt',
   );
-  const lines = data.data.split("\n");
+  const lines = data.data.split('\n');
   const reports = [];
   for (var count = 0; count <= 11; count++) {
     // First two lines are column names and units.
@@ -181,7 +181,7 @@ const createShipReport = async () => {
   shipReportIndex = new KDBush(
     values,
     (v) => v.lon,
-    (v) => v.lat
+    (v) => v.lat,
   );
   shipReportsFeatureCollection = weatherSourceToFeatureCollection(values);
   return {

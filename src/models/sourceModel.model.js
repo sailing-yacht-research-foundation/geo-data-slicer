@@ -1,6 +1,6 @@
 module.exports = (sequelize, Sequelize) => {
   const sourceModel = sequelize.define(
-    "SourceModels",
+    'SourceModels',
     {
       model_name: {
         type: Sequelize.TEXT,
@@ -64,14 +64,14 @@ module.exports = (sequelize, Sequelize) => {
         allowNull: false,
       },
       spatial_boundary: {
-        type: Sequelize.GEOMETRY("POLYGON", 4326),
+        type: Sequelize.GEOMETRY('POLYGON', 4326),
         allowNull: true,
       },
     },
     {
-      tableName: "SourceModels",
+      tableName: 'SourceModels',
       timestamps: false,
-    }
+    },
   );
 
   return sourceModel;

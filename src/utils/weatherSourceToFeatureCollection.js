@@ -1,6 +1,6 @@
-const turf = require("@turf/turf");
+const turf = require('@turf/turf');
 
-const isNumber = require("./isNumber");
+const isNumber = require('./isNumber');
 
 function weatherSourceToFeatureCollection(sourceList) {
   const points = [];

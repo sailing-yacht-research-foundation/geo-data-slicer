@@ -1,19 +1,19 @@
-const express = require("express");
-const turf = require("@turf/turf");
+const express = require('express');
+const turf = require('@turf/turf');
 
-const processRegionRequest = require("../services/processRegionRequest");
-const getArchivedData = require("../services/getArchivedData");
-const sliceGribByRegion = require("../utils/sliceGribByRegion");
+const processRegionRequest = require('../services/processRegionRequest');
+const getArchivedData = require('../services/getArchivedData');
+const sliceGribByRegion = require('../utils/sliceGribByRegion');
 
 var router = express.Router();
 
-router.get("/test", async function (request, response) {
+router.get('/test', async function (request, response) {
   response.json({
-    message: "This is a test url",
+    message: 'This is a test url',
   });
 });
 
-router.post("/", async function (request, response) {
+router.post('/', async function (request, response) {
   const roi = request.body.roi;
   const startTimeUnixMS = request.body.startTimeUnixMS;
   const endTimeUnixMS = request.body.endTimeUnixMS;
@@ -30,12 +30,12 @@ router.post("/", async function (request, response) {
     endTimeUnixMS,
     webhook,
     webhookToken,
-    updateFrequencyMinutes
+    updateFrequencyMinutes,
   );
-  response.send("ok");
+  response.send('ok');
 });
 
-router.get("/temp", async function (request, response) {
+router.get('/temp', async function (request, response) {
   var roi = turf.polygon([
     [
       [-16.5234375, 52.93539665862318],
@@ -46,8 +46,8 @@ router.get("/temp", async function (request, response) {
       [-16.5234375, 52.93539665862318],
     ],
   ]);
-  const startTime = new Date("2021-06-29T17:00:00+0000").getTime();
-  const endTime = new Date("2021-06-29T18:00:00+0000").getTime();
+  const startTime = new Date('2021-06-29T17:00:00+0000').getTime();
+  const endTime = new Date('2021-06-29T18:00:00+0000').getTime();
   const result = await getArchivedData(roi, startTime, endTime);
   response.json({ result });
   //   res.send("ok");

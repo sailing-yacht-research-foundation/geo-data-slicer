@@ -1,18 +1,18 @@
-const turf = require("@turf/turf");
-const KDBush = require("kdbush");
+const turf = require('@turf/turf');
+const KDBush = require('kdbush');
 
 function makeGeoJsons(csvData) {
-  const lines = csvData.split("\n");
+  const lines = csvData.split('\n');
   const timeToLevelToPoints = {};
   const geoJsons = [];
   const indices = {};
   lines.forEach((line) => {
-    const lineComponents = line.split(",");
+    const lineComponents = line.split(',');
     if (lineComponents.length == 7) {
       const time1 = lineComponents[0];
       const time2 = lineComponents[1];
 
-      const variable = lineComponents[2].replace(/"/gm, "");
+      const variable = lineComponents[2].replace(/"/gm, '');
       const level = lineComponents[3];
       const lonString = lineComponents[4];
       const latString = lineComponents[5];
@@ -54,13 +54,13 @@ function makeGeoJsons(csvData) {
       const index = new KDBush(
         points,
         (v) => v.lon,
-        (v) => v.lat
+        (v) => v.lat,
       );
       indices[time][level] = index;
       const geoJson = turf.featureCollection(geoJsonPoints);
       geoJson.properties = {
-        level: level.replace(/"/gm, ""),
-        time: time.replace(/"/gm, ""),
+        level: level.replace(/"/gm, ''),
+        time: time.replace(/"/gm, ''),
       };
       geoJsons.push(geoJson);
     });

@@ -1,5 +1,5 @@
-const AWS = require("aws-sdk");
-const fs = require("fs");
+const AWS = require('aws-sdk');
+const fs = require('fs');
 
 const s3 = new AWS.S3({
   accessKeyId: process.env.AWS_S3_ACCESS_KEY_ID,
@@ -19,10 +19,10 @@ async function downloadFromS3(bucket, key, downloadPath) {
       reject(err);
     };
     data
-      .on("error", errorHandler)
+      .on('error', errorHandler)
       .pipe(file)
-      .on("error", errorHandler)
-      .on("finish", () => {
+      .on('error', errorHandler)
+      .on('finish', () => {
         resolve(true);
       });
   });

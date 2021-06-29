@@ -1,7 +1,7 @@
-const path = require("path");
-const db = require("../models");
-const downloadFromS3 = require("../utils/downloadFromS3");
-const sliceGribByRegion = require("../utils/sliceGribByRegion");
+const path = require('path');
+const db = require('../models');
+const downloadFromS3 = require('../utils/downloadFromS3');
+const sliceGribByRegion = require('../utils/sliceGribByRegion');
 
 const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
@@ -24,12 +24,12 @@ async function getArchivedData(roi, startTime, endTime) {
         .map((row) => {
           return `${row[0]} ${row[1]}`;
         })
-        .join(",")}))`,
+        .join(',')}))`,
     },
     type: db.sequelize.QueryTypes.SELECT,
   });
 
-  let modelsToFetch = ["GFS", "RTOFS_GLOBAL", "ARPEGE_WORLD"];
+  let modelsToFetch = ['GFS', 'RTOFS_GLOBAL', 'ARPEGE_WORLD'];
   if (result.length > 0) {
     modelsToFetch = [
       ...modelsToFetch,
@@ -68,7 +68,7 @@ async function getArchivedData(roi, startTime, endTime) {
       const downloadResult = await downloadFromS3(
         bucketName,
         grib_file_url,
-        downloadPath
+        downloadPath,
       );
       return {
         id,
@@ -77,7 +77,7 @@ async function getArchivedData(roi, startTime, endTime) {
         end_time,
         gribFilePath: downloadResult ? downloadPath : null,
       };
-    })
+    }),
   );
   // Slice GRIBs into regions using wgrib2 or cdo, then convert to geojson and (either upload gribs and geojson to s3 and save the record or send this info to the analysis engine so it can do it).
   const jsonFiles = await Promise.all(
@@ -88,7 +88,7 @@ async function getArchivedData(roi, startTime, endTime) {
         fileID: id,
       });
       return { id, model, start_time, end_time, fileList };
-    })
+    }),
   );
 
   // Return with a either a list of sliced files in an s3 bucket just for sliced data, or actually return the geojson objects with time and boundary info.
