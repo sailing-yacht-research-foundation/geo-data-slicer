@@ -5,9 +5,9 @@ const {
   sailFlowSpotFeatureCollection,
   noaaBuoyFeatureCollection,
   windfinderFeatureCollection,
-  createShipReport,
 } = require('./featureCollections');
 const getArchivedData = require('./getArchivedData');
+const createShipReport = require('./createShipReport');
 
 async function processRegionRequest(
   roi,
@@ -24,18 +24,21 @@ async function processRegionRequest(
     startTimeUnixMS,
     endTimeUnixMS,
   );
-  await axios({
-    url: webhook,
-    method: 'POST',
-    data: {
-      archivedData,
-    },
-  });
+
   const { shipReportsFeatureCollection } = await createShipReport();
   const containedShipReports = turf.pointsWithinPolygon(
     shipReportsFeatureCollection,
     roi,
   );
+  await axios({
+    url: webhook,
+    method: 'POST',
+    data: {
+      archivedData,
+      containedShipReports,
+    },
+  });
+
   const containedNoaaBuoys = turf.pointsWithinPolygon(
     noaaBuoyFeatureCollection,
     roi,

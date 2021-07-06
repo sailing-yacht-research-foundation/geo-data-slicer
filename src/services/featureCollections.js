@@ -4,7 +4,6 @@ const puppeteer = require('puppeteer');
 const KDBush = require('kdbush');
 
 const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
-const valuesToDictionary = require('../utils/valuesToDictionary');
 
 const pointSourcesToScrape = JSON.parse(
   fs.readFileSync(
@@ -38,35 +37,6 @@ const noaaBuoyFeatureCollection = weatherSourceToFeatureCollection(
 const windfinderFeatureCollection = weatherSourceToFeatureCollection(
   pointSourcesToScrape.WINDFINDER,
 );
-
-// Puppeteer methods
-async function getShipReports() {
-  // const browser = await puppeteer.launch();
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox'],
-  });
-  const page = await browser.newPage();
-  await page.goto('https://www.ndbc.noaa.gov/ship_obs.php?uom=E&time=2');
-  const values = await page.evaluate(() => {
-    const values = [];
-    document.querySelectorAll('#contentarea > pre > span').forEach((s) => {
-      values.push(s.textContent.split(/[ ,]+/));
-    });
-    return values;
-  });
-
-  const valuesDictionaries = [];
-  var counter = 0;
-  values.forEach((valuesArray) => {
-    if (counter > 0) {
-      valuesDictionaries.push(valuesToDictionary(valuesArray));
-    }
-    counter++;
-  });
-  await browser.close();
-  return valuesDictionaries;
-}
 
 async function getWindfinderWind(windfinderUrl, id) {
   const browser = await puppeteer.launch();
@@ -168,28 +138,6 @@ async function getNoaaBuoyWind(buoyUrl) {
   return reports;
 }
 
-var shipReportIndex = null;
-var shipReportsFeatureCollection = null;
-const createShipReport = async () => {
-  if (shipReportIndex && shipReportsFeatureCollection) {
-    return {
-      shipReportIndex,
-      shipReportsFeatureCollection,
-    };
-  }
-  const values = await getShipReports();
-  shipReportIndex = new KDBush(
-    values,
-    (v) => v.lon,
-    (v) => v.lat,
-  );
-  shipReportsFeatureCollection = weatherSourceToFeatureCollection(values);
-  return {
-    shipReportIndex,
-    shipReportsFeatureCollection,
-  };
-};
-
 module.exports = {
   sailFlowSpotIndex,
   sailFlowSpotFeatureCollection,
@@ -197,5 +145,4 @@ module.exports = {
   noaaBuoyFeatureCollection,
   windfinderIndex,
   windfinderFeatureCollection,
-  createShipReport,
 };
