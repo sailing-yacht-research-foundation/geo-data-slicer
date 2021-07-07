@@ -13,29 +13,30 @@ async function processRegionRequest(
   webhookToken,
   updateFrequencyMinutes,
 ) {
-  const archivedData = await getArchivedData(
+  const archivedPromise = getArchivedData(roi, startTimeUnixMS, endTimeUnixMS);
+  const shipReportPromise = createShipReport(
+    roi,
+    startTimeUnixMS,
+    endTimeUnixMS,
+  );
+  const windfinderPromise = createWindfinderWind(
+    roi,
+    startTimeUnixMS,
+    endTimeUnixMS,
+  );
+  const noaaBuoyPromise = createNoaaBuoyWind(
     roi,
     startTimeUnixMS,
     endTimeUnixMS,
   );
 
-  const shipReports = await createShipReport(
-    roi,
-    startTimeUnixMS,
-    endTimeUnixMS,
-  );
-
-  const windfinderReports = await createWindfinderWind(
-    roi,
-    startTimeUnixMS,
-    endTimeUnixMS,
-  );
-
-  const noaaBuoyWinds = await createNoaaBuoyWind(
-    roi,
-    startTimeUnixMS,
-    endTimeUnixMS,
-  );
+  const [archivedData, shipReports, windfinderWinds, noaaBuoyWinds] =
+    await Promise.all([
+      archivedPromise,
+      shipReportPromise,
+      windfinderPromise,
+      noaaBuoyPromise,
+    ]);
 
   await axios({
     url: webhook,
@@ -44,7 +45,7 @@ async function processRegionRequest(
       token: webhookToken,
       archivedData,
       shipReports,
-      windfinderReports,
+      windfinderWinds,
       noaaBuoyWinds,
     },
   });
