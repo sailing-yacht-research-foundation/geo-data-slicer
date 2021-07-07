@@ -2,7 +2,8 @@ const puppeteer = require('puppeteer');
 const axios = require('axios');
 const turf = require('@turf/turf');
 
-async function getWindfinderToken() {
+const { windfinderIndex, windfinderPoints } = require('./createSourceIndex');
+async function _MANUAL_getWindfinderToken() {
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox'],
@@ -18,7 +19,7 @@ async function getWindfinderToken() {
   return token;
 }
 
-async function getWindfinderWind(roi) {
+async function _MANUAL_getWindfinderWind(roi) {
   const token = await getWindfinderToken();
   const bbox = turf.bbox(roi);
   const leftLon = bbox[0];
@@ -80,9 +81,71 @@ async function getWindfinderWind(roi) {
   return windfinderReports;
 }
 
+async function getWindfinderToken(windfinderUrl) {
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox'],
+  });
+  const page = await browser.newPage();
+  // Using default 30000ms timeout often results in timeout exceeded error
+  page.setDefaultNavigationTimeout(90000);
+  await page.goto(windfinderUrl);
+  const token = await page.evaluate(() => {
+    return API_TOKEN;
+  });
+  await browser.close();
+  return token;
+}
+
 const createWindfinderWind = async (roi) => {
-  const data = await getWindfinderWind(roi);
-  return data;
+  //   const data = await getWindfinderWind(roi);
+  let bbox = turf.bbox(roi);
+
+  const idList = windfinderIndex
+    .range(bbox[0], bbox[1], bbox[2], bbox[3])
+    .map((id) => windfinderPoints[id]);
+
+  const windfinderReports = [];
+  if (idList.length > 0) {
+    // scrape!
+    const token = await getWindfinderToken(idList[0].url); // Use the first url to get token
+    for (let i = 0; i < idList.length; i++) {
+      const { id: spotID, lon, lat } = idList[i];
+      const dataUrl = `https://api.windfinder.com/v2/spots/${spotID}/reports/?limit=-1&timespan=last24h&step=1m&customer=wfweb&version=1.0&token=${token}`;
+      const reportData = await axios.get(dataUrl);
+      if (Array.isArray(reportData.data) && reportData.data.length > 0) {
+        const reports = [];
+        reportData.data.forEach((datum) => {
+          const windSpeedKTS = datum.ws;
+          const windGustKTS = datum.wg;
+          const windDirectionDegrees = datum.wd;
+          const atmosphericPressureMB = datum.ap;
+          // TODO: what are these two times?
+          const time1 = datum.dtl;
+          const time2 = datum.dtl_s;
+
+          // "ws":8,"wd":90,"at":29.0,"ap":927,"cl":25,"dtl":"2021-07-05T13:00:00+07:00","dtl_s":"2021-07-05T12:59:30+07:00"
+
+          reports.push({
+            windSpeedKTS,
+            windGustKTS,
+            windDirectionDegrees,
+            atmosphericPressureMB,
+            time1,
+            time2,
+          });
+        });
+        windfinderReports.push({
+          spotID,
+          lon,
+          lat,
+          reports,
+        });
+      }
+    }
+  }
+
+  return windfinderReports;
 };
 
 module.exports = createWindfinderWind;
