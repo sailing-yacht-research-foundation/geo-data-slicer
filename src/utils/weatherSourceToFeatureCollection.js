@@ -19,7 +19,8 @@ function weatherSourceToFeatureCollection(sourceList) {
         }
       */
     if (isNumber(p.lon) && isNumber(p.lat)) {
-      const point = turf.point([p.lon, p.lat], p);
+      const { lon, lat, ...restP } = p;
+      const point = turf.point([lon, lat], restP);
       points.push(point);
     }
   });

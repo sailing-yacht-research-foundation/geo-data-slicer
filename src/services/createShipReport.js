@@ -1,5 +1,4 @@
 const puppeteer = require('puppeteer');
-const KDBush = require('kdbush');
 
 const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
 const valuesToDictionary = require('../utils/valuesToDictionary');
@@ -45,11 +44,17 @@ async function getShipReports() {
   return valuesDictionaries;
 }
 
-const createShipReport = async (startTimeUnixMS, endTimeUnixMS) => {
+const createShipReport = async (roi, startTimeUnixMS, endTimeUnixMS) => {
+  const currentTime = new Date().getTime();
+  const twelveHoursAgo = currentTime - 1000 * 60 * 60 * 12;
+  // We have no data available beyond these
+  if (startTimeUnixMS > currentTime || endTimeUnixMS < twelveHoursAgo) {
+    return null;
+  }
+
   const fullShipReport = await getShipReports();
 
   const slicedShipReports = [];
-  const currentTime = new Date().getTime();
   const currentHour = new Date().getUTCHours();
   const compareTime = new Date(currentTime);
   compareTime.setMinutes(0);
@@ -70,18 +75,19 @@ const createShipReport = async (startTimeUnixMS, endTimeUnixMS) => {
     }
   });
 
-  let shipReportIndex = new KDBush(
-    slicedShipReports,
-    (v) => v.lon,
-    (v) => v.lat,
-  );
+  // let shipReportIndex = new KDBush(
+  //   slicedShipReports,
+  //   (v) => v.lon,
+  //   (v) => v.lat,
+  // );
 
-  let shipReportsFeatureCollection =
+  const shipReportsFeatureCollection =
     weatherSourceToFeatureCollection(slicedShipReports);
-  return {
-    shipReportIndex,
+  const shipReports = turf.pointsWithinPolygon(
     shipReportsFeatureCollection,
-  };
+    roi,
+  );
+  return shipReports;
 };
 
 module.exports = createShipReport;

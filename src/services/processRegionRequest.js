@@ -19,17 +19,11 @@ async function processRegionRequest(
     endTimeUnixMS,
   );
 
-  const currentTime = new Date().getTime();
-  const twelveHoursAgo = currentTime - 1000 * 60 * 60 * 12;
-  let shipReports = null;
-  // We have no data available beyond these
-  if (!(startTimeUnixMS > currentTime || endTimeUnixMS < twelveHoursAgo)) {
-    const { shipReportsFeatureCollection } = await createShipReport(
-      startTimeUnixMS,
-      endTimeUnixMS,
-    );
-    shipReports = turf.pointsWithinPolygon(shipReportsFeatureCollection, roi);
-  }
+  const shipReports = await createShipReport(
+    roi,
+    startTimeUnixMS,
+    endTimeUnixMS,
+  );
 
   const windfinderReports = await createWindfinderWind(
     roi,
@@ -40,6 +34,7 @@ async function processRegionRequest(
     url: webhook,
     method: 'POST',
     data: {
+      token: webhookToken,
       archivedData,
       shipReports,
       windfinderReports,

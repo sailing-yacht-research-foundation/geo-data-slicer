@@ -3,6 +3,7 @@ const axios = require('axios');
 const turf = require('@turf/turf');
 
 const { windfinderIndex, windfinderPoints } = require('./createSourceIndex');
+const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
 async function _MANUAL_getWindfinderToken() {
   const browser = await puppeteer.launch({
     headless: true,
@@ -90,7 +91,8 @@ async function getWindfinderToken(windfinderUrl) {
     const page = await browser.newPage();
     // Using default 30000ms timeout often results in timeout exceeded error
     // page.setDefaultNavigationTimeout(90000);
-    await page.goto(windfinderUrl);
+    // Update: Changed to waitUntil domcontentloaded, no need to wait their script to just get the token
+    await page.goto(windfinderUrl, { waitUntil: 'domcontentloaded' });
     const token = await page.evaluate(() => {
       return API_TOKEN;
     });
@@ -123,7 +125,7 @@ const createWindfinderWind = async (roi, startTimeUnixMS, endTimeUnixMS) => {
     if (token == null) {
       // Still failing after 3 trial
       // TODO: Should we increase try count threshold value?
-      return [];
+      return null;
     }
 
     for (let i = 0; i < idList.length; i++) {
@@ -165,7 +167,7 @@ const createWindfinderWind = async (roi, startTimeUnixMS, endTimeUnixMS) => {
     }
   }
 
-  return windfinderReports;
+  return weatherSourceToFeatureCollection(windfinderReports);
 };
 
 module.exports = createWindfinderWind;
