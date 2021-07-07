@@ -1,13 +1,9 @@
 const turf = require('@turf/turf');
 const axios = require('axios');
 
-const {
-  sailFlowSpotFeatureCollection,
-  noaaBuoyFeatureCollection,
-  windfinderFeatureCollection,
-} = require('./featureCollections');
 const getArchivedData = require('./getArchivedData');
 const createShipReport = require('./createShipReport');
+const createWindfinderWind = require('./createWindfinderWind');
 
 async function processRegionRequest(
   roi,
@@ -30,27 +26,16 @@ async function processRegionRequest(
     shipReportsFeatureCollection,
     roi,
   );
+  const windfinderReports = await createWindfinderWind(roi);
   await axios({
     url: webhook,
     method: 'POST',
     data: {
       archivedData,
       containedShipReports,
+      windfinderReports,
     },
   });
-
-  const containedNoaaBuoys = turf.pointsWithinPolygon(
-    noaaBuoyFeatureCollection,
-    roi,
-  );
-  const containedSailflowSpots = turf.pointsWithinPolygon(
-    sailFlowSpotFeatureCollection,
-    roi,
-  );
-  const containedWindfinderPoints = turf.pointsWithinPolygon(
-    windfinderFeatureCollection,
-    roi,
-  );
 }
 
 module.exports = processRegionRequest;

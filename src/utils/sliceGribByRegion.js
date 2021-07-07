@@ -8,10 +8,12 @@ function sliceGribByRegion(roi, filename, options) {
   // TODO: Does different model have different ways to slice? Need to check
   let { fileID, folder, model } = options;
   let bbox = turf.bbox(roi);
-  const leftLon = bbox[0];
-  const bottomLat = bbox[1];
-  const rightLon = bbox[2];
-  const topLat = bbox[3];
+  // Need to round up and down values, so that bounding box doesn't become too small
+  // https://www.cpc.ncep.noaa.gov/products/wesley/wgrib2/small_grib.html
+  const leftLon = Math.floor(bbox[0]);
+  const bottomLat = Math.floor(bbox[1]);
+  const rightLon = Math.floor(bbox[2]);
+  const topLat = Math.floor(bbox[3]);
 
   execSync(
     'wgrib2 ' +
