@@ -30,17 +30,54 @@ async function getShipReports() {
     }
     counter++;
   });
+  /*
+   {
+    source: 'SHIP',
+    hour: 6,
+    lat: 34.7,
+    lon: 124.8,
+    twd_degrees: 300,
+    tws_kts: 6,
+    gust_kts: null,
+    waveheight_ft: null
+  }
+  */
   return valuesDictionaries;
 }
 
-const createShipReport = async () => {
-  const values = await getShipReports();
+const createShipReport = async (startTimeUnixMS, endTimeUnixMS) => {
+  const fullShipReport = await getShipReports();
+
+  const slicedShipReports = [];
+  const currentTime = new Date().getTime();
+  const currentHour = new Date().getUTCHours();
+  const compareTime = new Date(currentTime);
+  compareTime.setMinutes(0);
+  compareTime.setSeconds(0);
+  compareTime.setMilliseconds(0);
+
+  fullShipReport.forEach((row) => {
+    let diff = currentHour - row.hour;
+    if (row.hour > currentHour) {
+      diff += 24;
+    }
+    const dataTime = compareTime - 1000 * 60 * 60 * diff;
+    if (dataTime >= startTimeUnixMS && dataTime <= endTimeUnixMS) {
+      slicedShipReports.push({
+        ...row,
+        time: new Date(dataTime).toISOString(),
+      });
+    }
+  });
+
   let shipReportIndex = new KDBush(
-    values,
+    slicedShipReports,
     (v) => v.lon,
     (v) => v.lat,
   );
-  let shipReportsFeatureCollection = weatherSourceToFeatureCollection(values);
+
+  let shipReportsFeatureCollection =
+    weatherSourceToFeatureCollection(slicedShipReports);
   return {
     shipReportIndex,
     shipReportsFeatureCollection,

@@ -21,35 +21,14 @@ async function processRegionRequest(
 
   const currentTime = new Date().getTime();
   const twelveHoursAgo = currentTime - 1000 * 60 * 60 * 12;
-  let shipFeatures = [];
+  let shipReports = null;
   // We have no data available beyond these
   if (!(startTimeUnixMS > currentTime || endTimeUnixMS < twelveHoursAgo)) {
-    const { shipReportsFeatureCollection } = await createShipReport();
-    const containedShipReports = turf.pointsWithinPolygon(
-      shipReportsFeatureCollection,
-      roi,
+    const { shipReportsFeatureCollection } = await createShipReport(
+      startTimeUnixMS,
+      endTimeUnixMS,
     );
-    const currentHour = new Date().getUTCHours();
-    const compareTime = new Date(currentTime);
-    compareTime.setMinutes(0);
-    compareTime.setSeconds(0);
-    compareTime.setMilliseconds(0);
-    containedShipReports.features.forEach((row) => {
-      let diff = currentHour - row.properties.hour;
-      if (row.properties.hour > currentHour) {
-        diff += 24;
-      }
-      const dataTime = compareTime - 1000 * 60 * 60 * diff;
-      if (dataTime >= startTimeUnixMS && dataTime <= endTimeUnixMS) {
-        shipFeatures.push({
-          ...row,
-          properties: {
-            ...row.properties,
-            time: new Date(dataTime).toISOString(),
-          },
-        });
-      }
-    });
+    shipReports = turf.pointsWithinPolygon(shipReportsFeatureCollection, roi);
   }
 
   const windfinderReports = await createWindfinderWind(
@@ -62,10 +41,7 @@ async function processRegionRequest(
     method: 'POST',
     data: {
       archivedData,
-      shipReports: {
-        type: 'FeatureCollection',
-        features: shipFeatures,
-      },
+      shipReports,
       windfinderReports,
     },
   });
