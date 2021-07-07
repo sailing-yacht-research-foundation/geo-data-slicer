@@ -1,9 +1,9 @@
-const turf = require('@turf/turf');
 const axios = require('axios');
 
 const getArchivedData = require('./getArchivedData');
 const createShipReport = require('./createShipReport');
 const createWindfinderWind = require('./createWindfinderWind');
+const createNoaaBuoyWind = require('./createNoaaBuoyWind');
 
 async function processRegionRequest(
   roi,
@@ -30,6 +30,13 @@ async function processRegionRequest(
     startTimeUnixMS,
     endTimeUnixMS,
   );
+
+  const noaaBuoyWinds = await createNoaaBuoyWind(
+    roi,
+    startTimeUnixMS,
+    endTimeUnixMS,
+  );
+
   await axios({
     url: webhook,
     method: 'POST',
@@ -38,6 +45,7 @@ async function processRegionRequest(
       archivedData,
       shipReports,
       windfinderReports,
+      noaaBuoyWinds,
     },
   });
 }
