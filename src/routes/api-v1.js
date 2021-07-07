@@ -4,6 +4,7 @@ const turf = require('@turf/turf');
 const processRegionRequest = require('../services/processRegionRequest');
 const getArchivedData = require('../services/getArchivedData');
 const createWindfinderWind = require('../services/createWindfinderWind');
+const createShipReport = require('../services/createShipReport');
 
 var router = express.Router();
 
@@ -26,7 +27,7 @@ router.get('/test', async function (request, response) {
       ],
     },
   };
-
+  //[ 5.720305, 53.008259, 5.772853, 53.034974 ]
   // let bboxFromDB = {
   //   type: 'Polygon',
   //   coordinates: [
@@ -64,6 +65,70 @@ router.get('/test', async function (request, response) {
     message: 'This is a test url',
     reports,
   });
+});
+
+router.get('/shipreport', async function (request, response) {
+  let roi = {
+    type: 'Feature',
+    properties: {},
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [-16.5234375, 52.93539665862318],
+          [-9.140625, 47.35371061951363],
+          [2.5927734375, 52.62972886718355],
+          [-3.33984375, 58.367156332478885],
+          [-17.0068359375, 56.218923189166624],
+          [-16.5234375, 52.93539665862318],
+        ],
+      ],
+    },
+  };
+  let startTimeUnixMS = 1625619600000;
+  let endTimeUnixMS = 1625626800000;
+  const currentTime = new Date().getTime();
+  const twelveHoursAgo = currentTime - 1000 * 60 * 60 * 12;
+  let shipReports = [];
+  // We have no data available beyond these
+  console.log(
+    currentTime,
+    startTimeUnixMS,
+    endTimeUnixMS,
+    twelveHoursAgo,
+    startTimeUnixMS > currentTime,
+    endTimeUnixMS < twelveHoursAgo,
+  );
+  if (!(startTimeUnixMS > currentTime || endTimeUnixMS < twelveHoursAgo)) {
+    const { shipReportsFeatureCollection } = await createShipReport();
+    const containedShipReports = turf.pointsWithinPolygon(
+      shipReportsFeatureCollection,
+      roi,
+    );
+    const currentHour = new Date().getUTCHours();
+    const compareTime = new Date(currentTime);
+    compareTime.setMinutes(0);
+    compareTime.setSeconds(0);
+    compareTime.setMilliseconds(0);
+    containedShipReports.features.forEach((row) => {
+      let diff = currentHour - row.properties.hour;
+      if (row.properties.hour > currentHour) {
+        diff += 24;
+      }
+      const dataTime = compareTime - 1000 * 60 * 60 * diff;
+      console.log(diff, dataTime);
+      if (dataTime >= startTimeUnixMS && dataTime <= endTimeUnixMS) {
+        shipReports.push({
+          ...row,
+          properties: {
+            ...row.properties,
+            time: new Date(dataTime).toISOString(),
+          },
+        });
+      }
+    });
+  }
+  response.json({ shipReports });
 });
 
 router.post('/', async function (request, response) {

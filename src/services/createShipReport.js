@@ -12,7 +12,8 @@ async function getShipReports() {
     args: ['--no-sandbox'],
   });
   const page = await browser.newPage();
-  await page.goto('https://www.ndbc.noaa.gov/ship_obs.php?uom=E&time=2');
+  // Maximum available time past 12 hours
+  await page.goto('https://www.ndbc.noaa.gov/ship_obs.php?uom=E&time=12');
   const values = await page.evaluate(() => {
     const values = [];
     document.querySelectorAll('#contentarea > pre > span').forEach((s) => {
@@ -20,7 +21,7 @@ async function getShipReports() {
     });
     return values;
   });
-
+  await browser.close();
   const valuesDictionaries = [];
   var counter = 0;
   values.forEach((valuesArray) => {
@@ -29,7 +30,6 @@ async function getShipReports() {
     }
     counter++;
   });
-  await browser.close();
   return valuesDictionaries;
 }
 

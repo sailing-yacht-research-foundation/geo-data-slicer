@@ -83,11 +83,11 @@ async function getArchivedData(roi, startTime, endTime) {
   const jsonFiles = await Promise.all(
     downloadedFiles.map((row) => {
       const { id, model, start_time, end_time, gribFilePath } = row;
-      const fileList = sliceGribByRegion(roi, gribFilePath, {
+      const geojsons = sliceGribByRegion(roi, gribFilePath, {
         folder: path.resolve(__dirname, `../../`),
         fileID: id,
       });
-      return { id, model, start_time, end_time, fileList };
+      return { id, model, start_time, end_time, geojsons };
     }),
   );
 

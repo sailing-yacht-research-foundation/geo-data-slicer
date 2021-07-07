@@ -82,23 +82,29 @@ async function _MANUAL_getWindfinderWind(roi) {
 }
 
 async function getWindfinderToken(windfinderUrl) {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox'],
-  });
-  const page = await browser.newPage();
-  // Using default 30000ms timeout often results in timeout exceeded error
-  page.setDefaultNavigationTimeout(90000);
-  await page.goto(windfinderUrl);
-  const token = await page.evaluate(() => {
-    return API_TOKEN;
-  });
-  await browser.close();
-  return token;
+  try {
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox'],
+    });
+    const page = await browser.newPage();
+    // Using default 30000ms timeout often results in timeout exceeded error
+    // page.setDefaultNavigationTimeout(90000);
+    await page.goto(windfinderUrl);
+    const token = await page.evaluate(() => {
+      return API_TOKEN;
+    });
+    await browser.close();
+    return token;
+  } catch (error) {
+    console.error('Failed to get token using puppeteer', error);
+    return null;
+  }
 }
 
-const createWindfinderWind = async (roi) => {
-  //   const data = await getWindfinderWind(roi);
+const createWindfinderWind = async (roi, startTimeUnixMS, endTimeUnixMS) => {
+  const startTime = new Date(startTimeUnixMS);
+  const endTime = new Date(endTimeUnixMS);
   let bbox = turf.bbox(roi);
 
   const idList = windfinderIndex
@@ -107,8 +113,19 @@ const createWindfinderWind = async (roi) => {
 
   const windfinderReports = [];
   if (idList.length > 0) {
-    // scrape!
-    const token = await getWindfinderToken(idList[0].url); // Use the first url to get token
+    let token = null;
+    let tryCount = 0;
+    do {
+      tryCount++;
+      token = await getWindfinderToken(idList[0].url); // Use the first url to get token
+    } while (token == null && tryCount < 3);
+
+    if (token == null) {
+      // Still failing after 3 trial
+      // TODO: Should we increase try count threshold value?
+      return [];
+    }
+
     for (let i = 0; i < idList.length; i++) {
       const { id: spotID, lon, lat } = idList[i];
       const dataUrl = `https://api.windfinder.com/v2/spots/${spotID}/reports/?limit=-1&timespan=last24h&step=1m&customer=wfweb&version=1.0&token=${token}`;
@@ -116,24 +133,27 @@ const createWindfinderWind = async (roi) => {
       if (Array.isArray(reportData.data) && reportData.data.length > 0) {
         const reports = [];
         reportData.data.forEach((datum) => {
-          const windSpeedKTS = datum.ws;
-          const windGustKTS = datum.wg;
-          const windDirectionDegrees = datum.wd;
-          const atmosphericPressureMB = datum.ap;
-          // TODO: what are these two times?
-          const time1 = datum.dtl;
-          const time2 = datum.dtl_s;
-
           // "ws":8,"wd":90,"at":29.0,"ap":927,"cl":25,"dtl":"2021-07-05T13:00:00+07:00","dtl_s":"2021-07-05T12:59:30+07:00"
+          // TODO: what are these two times?
+          const time1 = new Date(datum.dtl); // This is the data shown on their graph
+          const time2 = new Date(datum.dtl_s); // not sure about this one
 
-          reports.push({
-            windSpeedKTS,
-            windGustKTS,
-            windDirectionDegrees,
-            atmosphericPressureMB,
-            time1,
-            time2,
-          });
+          // Only get the timestamp we want
+          if (startTime <= time1 && endTime >= time1) {
+            const windSpeedKTS = datum.ws;
+            const windGustKTS = datum.wg; // This possibly null, when I tested a spot in Indonesia, there's no gust value
+            const windDirectionDegrees = datum.wd;
+            const atmosphericPressureMB = datum.ap;
+
+            reports.push({
+              windSpeedKTS,
+              windGustKTS,
+              windDirectionDegrees,
+              atmosphericPressureMB,
+              time1,
+              time2,
+            });
+          }
         });
         windfinderReports.push({
           spotID,
