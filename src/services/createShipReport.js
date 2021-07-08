@@ -45,12 +45,12 @@ async function getShipReports() {
   return valuesDictionaries;
 }
 
-const createShipReport = async (roi, startTimeUnixMS, endTimeUnixMS) => {
+const createShipReport = async (startTimeUnixMS, endTimeUnixMS) => {
   const currentTime = new Date().getTime();
   const twelveHoursAgo = currentTime - 1000 * 60 * 60 * 12;
   // We have no data available beyond these
   if (startTimeUnixMS > currentTime || endTimeUnixMS < twelveHoursAgo) {
-    return null;
+    return weatherSourceToFeatureCollection([]);
   }
 
   const fullShipReport = await getShipReports();
@@ -82,12 +82,7 @@ const createShipReport = async (roi, startTimeUnixMS, endTimeUnixMS) => {
   //   (v) => v.lat,
   // );
 
-  const shipReportsFeatureCollection =
-    weatherSourceToFeatureCollection(slicedShipReports);
-  const shipReports = turf.pointsWithinPolygon(
-    shipReportsFeatureCollection,
-    roi,
-  );
+  const shipReports = weatherSourceToFeatureCollection(slicedShipReports);
   return shipReports;
 };
 

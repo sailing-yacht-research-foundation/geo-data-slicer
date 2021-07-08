@@ -22,11 +22,7 @@ async function processRegionRequest(
 ) {
   const archivedPromise = getArchivedData(roi, startTimeUnixMS, endTimeUnixMS);
 
-  const shipReportPromise = createShipReport(
-    roi,
-    startTimeUnixMS,
-    endTimeUnixMS,
-  );
+  const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
 
   const bbox = turf.bbox(roi);
 
@@ -48,7 +44,7 @@ async function processRegionRequest(
     endTimeUnixMS,
   );
 
-  const [archivedData, shipReports, windfinderWinds, noaaBuoyWinds] =
+  const [archivedData, shipReportsFull, windfinderWinds, noaaBuoyWinds] =
     await Promise.all([
       archivedPromise,
       shipReportPromise,
@@ -56,6 +52,7 @@ async function processRegionRequest(
       noaaBuoyPromise,
     ]);
 
+  const shipReports = turf.pointsWithinPolygon(shipReportsFull, roi);
   await axios({
     url: webhook,
     method: 'POST',

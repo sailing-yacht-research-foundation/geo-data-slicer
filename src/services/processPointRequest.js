@@ -19,15 +19,8 @@ async function processPointRequest(
   webhook,
   webhookToken,
 ) {
-  const roi = turf.circle(point, 1, { steps: 10, units: 'kilometers' });
-  const bbox = turf.bbox(roi);
-
   //   const archivedPromise = getArchivedData(roi, startTimeUnixMS, endTimeUnixMS);
-  //   const shipReportPromise = createShipReport(
-  //     roi,
-  //     startTimeUnixMS,
-  //     endTimeUnixMS,
-  //   );
+  const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
 
   const [lon, lat] = point.geometry.coordinates;
   // This will get spots based on precise location
@@ -61,14 +54,16 @@ async function processPointRequest(
   //     ]);
   const windfinderWinds = await windfinderPromise;
   const noaaBuoyWinds = await noaaBuoyPromise;
+  const shipReportsFull = await shipReportPromise;
 
+  const shipReports = turf.nearestPoint(point, shipReportsFull);
   await axios({
     url: webhook,
     method: 'POST',
     data: {
       token: webhookToken,
       //   archivedData,
-      //   shipReports,
+      shipReports,
       windfinderWinds,
       noaaBuoyWinds,
     },
