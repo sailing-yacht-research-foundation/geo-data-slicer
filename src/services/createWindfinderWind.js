@@ -2,8 +2,8 @@ const puppeteer = require('puppeteer');
 const axios = require('axios');
 const turf = require('@turf/turf');
 
-const { windfinderIndex, windfinderPoints } = require('./createSourceIndex');
 const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
+
 async function _MANUAL_getWindfinderToken() {
   const browser = await puppeteer.launch({
     headless: true,
@@ -104,22 +104,45 @@ async function getWindfinderToken(windfinderUrl) {
   }
 }
 
-const createWindfinderWind = async (roi, startTimeUnixMS, endTimeUnixMS) => {
+async function requestWindfinderReport(spotID, token) {
+  const dataUrl = `https://api.windfinder.com/v2/spots/${spotID}/reports/?limit=-1&timespan=last24h&step=1m&customer=wfweb&version=1.0&token=${token}`;
+  const reportData = await axios.get(dataUrl);
+  const reports = [];
+  if (Array.isArray(reportData.data) && reportData.data.length > 0) {
+    reportData.data.forEach((datum) => {
+      // "ws":8,"wd":90,"at":29.0,"ap":927,"cl":25,"dtl":"2021-07-05T13:00:00+07:00","dtl_s":"2021-07-05T12:59:30+07:00"
+      // TODO: what are these two times?
+      const time1 = new Date(datum.dtl); // This is the data shown on their graph
+      const time2 = new Date(datum.dtl_s); // not sure about this one
+      const windSpeedKTS = datum.ws;
+      const windGustKTS = datum.wg; // This possibly null, when I tested a spot in Indonesia, there's no gust value
+      const windDirectionDegrees = datum.wd;
+      const atmosphericPressureMB = datum.ap;
+
+      reports.push({
+        windSpeedKTS,
+        windGustKTS,
+        windDirectionDegrees,
+        atmosphericPressureMB,
+        time1,
+        time2,
+      });
+    });
+  }
+  return reports;
+}
+
+async function createWindfinderWind(spots, startTimeUnixMS, endTimeUnixMS) {
   const startTime = new Date(startTimeUnixMS);
   const endTime = new Date(endTimeUnixMS);
-  let bbox = turf.bbox(roi);
-
-  const idList = windfinderIndex
-    .range(bbox[0], bbox[1], bbox[2], bbox[3])
-    .map((id) => windfinderPoints[id]);
-
   const windfinderReports = [];
-  if (idList.length > 0) {
+
+  if (spots.length > 0) {
     let token = null;
     let tryCount = 0;
     do {
       tryCount++;
-      token = await getWindfinderToken(idList[0].url); // Use the first url to get token
+      token = await getWindfinderToken(spots[0].url); // Use the first url to get token
     } while (token == null && tryCount < 3);
 
     if (token == null) {
@@ -128,46 +151,27 @@ const createWindfinderWind = async (roi, startTimeUnixMS, endTimeUnixMS) => {
       return null;
     }
 
-    for (let i = 0; i < idList.length; i++) {
-      const { id: spotID, lon, lat } = idList[i];
-      const dataUrl = `https://api.windfinder.com/v2/spots/${spotID}/reports/?limit=-1&timespan=last24h&step=1m&customer=wfweb&version=1.0&token=${token}`;
-      const reportData = await axios.get(dataUrl);
-      if (Array.isArray(reportData.data) && reportData.data.length > 0) {
-        const reports = [];
-        reportData.data.forEach((datum) => {
-          // "ws":8,"wd":90,"at":29.0,"ap":927,"cl":25,"dtl":"2021-07-05T13:00:00+07:00","dtl_s":"2021-07-05T12:59:30+07:00"
-          // TODO: what are these two times?
-          const time1 = new Date(datum.dtl); // This is the data shown on their graph
-          const time2 = new Date(datum.dtl_s); // not sure about this one
-
-          // Only get the timestamp we want
-          if (startTime <= time1 && endTime >= time1) {
-            const windSpeedKTS = datum.ws;
-            const windGustKTS = datum.wg; // This possibly null, when I tested a spot in Indonesia, there's no gust value
-            const windDirectionDegrees = datum.wd;
-            const atmosphericPressureMB = datum.ap;
-
-            reports.push({
-              windSpeedKTS,
-              windGustKTS,
-              windDirectionDegrees,
-              atmosphericPressureMB,
-              time1,
-              time2,
-            });
-          }
+    for (let i = 0; i < spots.length; i++) {
+      const { id: spotID, lon, lat } = spots[i];
+      const reports = await requestWindfinderReport(spotID, token);
+      if (reports.length > 0) {
+        // Only get the timestamp we want
+        const slicedReports = reports.filter((row) => {
+          return startTime <= row.time1 && endTime >= row.time1;
         });
-        windfinderReports.push({
-          spotID,
-          lon,
-          lat,
-          reports,
-        });
+        if (slicedReports.length > 0) {
+          windfinderReports.push({
+            spotID,
+            lon,
+            lat,
+            reports,
+          });
+        }
       }
     }
   }
 
   return weatherSourceToFeatureCollection(windfinderReports);
-};
+}
 
 module.exports = createWindfinderWind;

@@ -1,5 +1,7 @@
 const axios = require('axios');
+const turf = require('@turf/turf');
 
+const { windfinderIndex, windfinderPoints } = require('./createSourceIndex');
 const getArchivedData = require('./getArchivedData');
 const createShipReport = require('./createShipReport');
 const createWindfinderWind = require('./createWindfinderWind');
@@ -14,13 +16,19 @@ async function processRegionRequest(
   updateFrequencyMinutes,
 ) {
   const archivedPromise = getArchivedData(roi, startTimeUnixMS, endTimeUnixMS);
+
   const shipReportPromise = createShipReport(
     roi,
     startTimeUnixMS,
     endTimeUnixMS,
   );
+
+  const bbox = turf.bbox(roi);
+  const spots = windfinderIndex
+    .range(bbox[0], bbox[1], bbox[2], bbox[3])
+    .map((id) => windfinderPoints[id]);
   const windfinderPromise = createWindfinderWind(
-    roi,
+    spots,
     startTimeUnixMS,
     endTimeUnixMS,
   );
