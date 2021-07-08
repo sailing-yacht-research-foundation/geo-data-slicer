@@ -118,7 +118,12 @@ async function getWeatherFilesByPoint(point, startTime, endTime) {
   return downloadArchivedData(files);
 }
 
-async function getArchivedDataByRegion(roi, downloadedFiles) {
+async function getArchivedDataByRegion(roi, startTime, endTime) {
+  const downloadedFiles = await getWeatherFilesByRegion(
+    roi,
+    startTime,
+    endTime,
+  );
   // Slice GRIBs into regions using wgrib2 or cdo, then convert to geojson and (either upload gribs and geojson to s3 and save the record or send this info to the analysis engine so it can do it).
   const jsonFiles = await Promise.all(
     downloadedFiles.map((row) => {
@@ -136,7 +141,12 @@ async function getArchivedDataByRegion(roi, downloadedFiles) {
   return jsonFiles;
 }
 
-async function getArchivedDataByPoint(point, downloadedFiles) {
+async function getArchivedDataByPoint(point, startTime, endTime) {
+  const downloadedFiles = await getWeatherFilesByPoint(
+    point,
+    startTime,
+    endTime,
+  );
   const data = await Promise.all(
     downloadedFiles.map((row) => {
       const { id, model, start_time, end_time, gribFilePath } = row;
@@ -151,8 +161,6 @@ async function getArchivedDataByPoint(point, downloadedFiles) {
 }
 
 module.exports = {
-  getWeatherFilesByRegion,
-  getWeatherFilesByPoint,
   getArchivedDataByRegion,
   getArchivedDataByPoint,
 };

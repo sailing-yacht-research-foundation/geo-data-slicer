@@ -22,14 +22,11 @@ async function processPointRequest(
   webhook,
   webhookToken,
 ) {
-  const archivedPromise = new Promise(async (resolve) => {
-    const downloadedFiles = await getWeatherFilesByPoint(
-      point,
-      startTimeUnixMS,
-      endTimeUnixMS,
-    );
-    resolve(getArchivedDataByPoint(point, downloadedFiles));
-  });
+  const archivedPromise = getArchivedDataByPoint(
+    point,
+    startTimeUnixMS,
+    endTimeUnixMS,
+  );
 
   const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
 
@@ -56,17 +53,13 @@ async function processPointRequest(
     endTimeUnixMS,
   );
 
-  //   const [archivedData, shipReports, windfinderWinds, noaaBuoyWinds] =
-  //     await Promise.all([
-  //       archivedPromise,
-  //       shipReportPromise,
-  //       windfinderPromise,
-  //       noaaBuoyPromise,
-  //     ]);
-  const archivedData = await archivedPromise;
-  const windfinderWinds = await windfinderPromise;
-  const noaaBuoyWinds = await noaaBuoyPromise;
-  const shipReportsFull = await shipReportPromise;
+  const [archivedData, shipReportsFull, windfinderWinds, noaaBuoyWinds] =
+    await Promise.all([
+      archivedPromise,
+      shipReportPromise,
+      windfinderPromise,
+      noaaBuoyPromise,
+    ]);
 
   const shipReports = turf.nearestPoint(point, shipReportsFull);
   await axios({

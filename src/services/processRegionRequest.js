@@ -23,14 +23,11 @@ async function processRegionRequest(
   webhookToken,
   updateFrequencyMinutes,
 ) {
-  const archivedPromise = new Promise(async (resolve) => {
-    const downloadedFiles = await getWeatherFilesByRegion(
-      roi,
-      startTimeUnixMS,
-      endTimeUnixMS,
-    );
-    resolve(getArchivedDataByRegion(roi, downloadedFiles));
-  });
+  const archivedPromise = getArchivedDataByRegion(
+    roi,
+    startTimeUnixMS,
+    endTimeUnixMS,
+  );
 
   const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
 
