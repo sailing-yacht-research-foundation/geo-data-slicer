@@ -1,6 +1,7 @@
 const express = require('express');
 
 const processRegionRequest = require('../services/processRegionRequest');
+const processPointRequest = require('../services/processPointRequest');
 
 var router = express.Router();
 
@@ -23,6 +24,16 @@ router.post('/', async function (request, response) {
     webhookToken,
     updateFrequencyMinutes,
   );
+  response.send('ok');
+});
+
+router.post('/point', async function (request, response) {
+  const point = request.body.point;
+  const time = request.body.time;
+  const webhook = request.body.webhook;
+  const webhookToken = request.body.webhookToken;
+
+  processPointRequest(point, time, webhook, webhookToken);
   response.send('ok');
 });
 

@@ -164,7 +164,7 @@ async function createWindfinderWind(spots, startTimeUnixMS, endTimeUnixMS) {
             spotID,
             lon,
             lat,
-            reports,
+            reports: slicedReports,
           });
         }
       }
