@@ -29,11 +29,18 @@ router.post('/', async function (request, response) {
 
 router.post('/point', async function (request, response) {
   const point = request.body.point;
-  const time = request.body.time;
+  const startTimeUnixMS = request.body.startTimeUnixMS;
+  const endTimeUnixMS = request.body.endTimeUnixMS;
   const webhook = request.body.webhook;
   const webhookToken = request.body.webhookToken;
 
-  processPointRequest(point, time, webhook, webhookToken);
+  processPointRequest(
+    point,
+    startTimeUnixMS,
+    endTimeUnixMS,
+    webhook,
+    webhookToken,
+  );
   response.send('ok');
 });
 

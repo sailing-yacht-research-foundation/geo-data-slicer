@@ -1,7 +1,12 @@
 const axios = require('axios');
 const turf = require('@turf/turf');
 
-const { windfinderIndex, windfinderPoints } = require('./createSourceIndex');
+const {
+  windfinderIndex,
+  windfinderPoints,
+  noaaBuoyIndex,
+  noaaBuoyPoints,
+} = require('./createSourceIndex');
 const getArchivedData = require('./getArchivedData');
 const createShipReport = require('./createShipReport');
 const createWindfinderWind = require('./createWindfinderWind');
@@ -24,6 +29,7 @@ async function processRegionRequest(
   );
 
   const bbox = turf.bbox(roi);
+
   const spots = windfinderIndex
     .range(bbox[0], bbox[1], bbox[2], bbox[3])
     .map((id) => windfinderPoints[id]);
@@ -32,8 +38,12 @@ async function processRegionRequest(
     startTimeUnixMS,
     endTimeUnixMS,
   );
+
+  const buoys = noaaBuoyIndex
+    .range(bbox[0], bbox[1], bbox[2], bbox[3])
+    .map((id) => noaaBuoyPoints[id]);
   const noaaBuoyPromise = createNoaaBuoyWind(
-    roi,
+    buoys,
     startTimeUnixMS,
     endTimeUnixMS,
   );

@@ -1,9 +1,6 @@
-const puppeteer = require('puppeteer');
 const axios = require('axios');
-const turf = require('@turf/turf');
 
 const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
-const { noaaBuoyIndex, noaaBuoyPoints } = require('./createSourceIndex');
 
 async function getAvailableStation() {
   const response = await axios.get(
@@ -23,19 +20,14 @@ async function getAvailableStation() {
   return stationList;
 }
 
-const createNoaaBuoyWind = async (roi, startTimeUnixMS, endTimeUnixMS) => {
+const createNoaaBuoyWind = async (buoys, startTimeUnixMS, endTimeUnixMS) => {
   const startTime = new Date(startTimeUnixMS);
   const endTime = new Date(endTimeUnixMS);
-  let bbox = turf.bbox(roi);
-
-  const buoyList = noaaBuoyIndex
-    .range(bbox[0], bbox[1], bbox[2], bbox[3])
-    .map((id) => noaaBuoyPoints[id]);
-
   const availableStations = await getAvailableStation();
   const buoyWinds = [];
-  for (let i = 0; i < buoyList.length; i++) {
-    const { url: buoyUrl, lon, lat } = buoyList[i];
+
+  for (let i = 0; i < buoys.length; i++) {
+    const { url: buoyUrl, lon, lat } = buoys[i];
     const station = buoyUrl.split('station=')[1];
     if (!availableStations[station]) {
       // Will be 404 anyway
