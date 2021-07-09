@@ -1,14 +1,11 @@
 const execSync = require('child_process').execSync;
-const turf = require('@turf/turf');
 const dayjs = require('dayjs');
 
+const makeGeoJsons = require('./makeGeoJsons');
 const customParseFormat = require('dayjs/plugin/customParseFormat');
 dayjs.extend(customParseFormat);
 
-const makeGeoJsons = require('./makeGeoJsons');
-
 function sliceGribByPoint(point, filename) {
-  // TODO: Does different model have different ways to slice? Need to check
   const [lon, lat] = point.geometry.coordinates;
 
   const data = execSync(
@@ -31,67 +28,26 @@ function sliceGribByPoint(point, filename) {
       const lat = values[1].split('=')[1];
       const value = values[2].split('=')[1];
       finalData.push({
-        time: time.toISOString(),
+        time: time.format('YYYY-MM-DD HH:mm:ss'),
         variable,
         level,
         lon,
         lat,
         value: Number(value),
       });
-      //   console.log(
-      //     time.format('YYYY-MM-DD HH:mm:ss'),
-      //     variable,
-      //     level,
-      //     lon,
-      //     lat,
-      //     value,
-      //   );
     }
   });
 
-  const timeToLevelToPoints = {};
-  finalData.forEach((line) => {
-    const { time, variable, level, lon, lat, value } = line;
-    const pointHash = `${lon}${lat}`;
+  const geoJsons = makeGeoJsons(finalData);
 
-    if (timeToLevelToPoints[time] === undefined) {
-      timeToLevelToPoints[time] = {};
-    }
-
-    if (timeToLevelToPoints[time][level] === undefined) {
-      timeToLevelToPoints[time][level] = {};
-    }
-
-    if (timeToLevelToPoints[time][level][pointHash] === undefined) {
-      timeToLevelToPoints[time][level][pointHash] = {
-        lat: parseFloat(lat),
-        lon: parseFloat(lon),
-      };
-    }
-    timeToLevelToPoints[time][level][pointHash][variable] = value;
+  const finalResult = geoJsons.filter((geoJson) => {
+    return (
+      geoJson.properties.level === '10 m above ground' ||
+      geoJson.properties.level === 'surface'
+    );
   });
 
-  const geoJsons = [];
-  Object.keys(timeToLevelToPoints).forEach((time) => {
-    Object.keys(timeToLevelToPoints[time]).forEach((level) => {
-      const geoJsonPoints = [];
-      Object.values(timeToLevelToPoints[time][level]).forEach((p) => {
-        try {
-          const { lon, lat, ...otherProps } = p;
-          const geoJsonPoint = turf.point([p.lon, p.lat], otherProps);
-          geoJsonPoints.push(geoJsonPoint);
-        } catch (err) {}
-      });
-
-      const geoJson = turf.featureCollection(geoJsonPoints);
-      geoJson.properties = {
-        level: level.replace(/"/gm, ''),
-        time: time.replace(/"/gm, ''),
-      };
-      geoJsons.push(geoJson);
-    });
-  });
-  return geoJsons;
+  return finalResult;
 }
 
 module.exports = sliceGribByPoint;

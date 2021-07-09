@@ -148,7 +148,7 @@ async function createWindfinderWind(spots, startTimeUnixMS, endTimeUnixMS) {
     if (token == null) {
       // Still failing after 3 trial
       // TODO: Should we increase try count threshold value?
-      return null;
+      return weatherSourceToFeatureCollection([]);
     }
 
     for (let i = 0; i < spots.length; i++) {

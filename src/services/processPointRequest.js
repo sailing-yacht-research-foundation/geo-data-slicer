@@ -61,7 +61,11 @@ async function processPointRequest(
       noaaBuoyPromise,
     ]);
 
-  const shipReports = turf.nearestPoint(point, shipReportsFull);
+  let shipReports = shipReportsFull;
+  if (shipReportsFull.features.length > 0) {
+    shipReports = turf.nearestPoint(point, shipReportsFull);
+  }
+
   await axios({
     url: webhook,
     method: 'POST',
