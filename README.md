@@ -8,8 +8,6 @@ It is meant to interface with the analysis engine directly.
 
 ## Todo:
 
-- Define contract between this service and the analysis engine.
-- Connect to the archiver s3 and PostGIS services to get the data to be sliced.
 - Add error logging and exception handling, tests, etc.
 
 ## Building & Running

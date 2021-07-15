@@ -47,11 +47,9 @@ function sliceGribByRegion(bbox, filename, options) {
   execSync(
     `wgrib2 ${filename} -small_grib ${leftLon}:${rightLon} ${bottomLat}:${topLat} ${folder}/small_${fileID}.grib2`,
   );
-  console.time(`csv-${fileID}`);
   execSync(
     `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
   );
-  console.timeEnd(`csv-${fileID}`);
   execSync(`rm ${filename}`);
   const csvData = fs.readFileSync(`${folder}/${fileID}.csv`, 'utf-8');
   execSync(`rm ${folder}/${fileID}.csv`);
@@ -62,15 +60,7 @@ function sliceGribByRegion(bbox, filename, options) {
     if (INCLUDED_LEVELS[model]) {
       return INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1;
     }
-    console.log('non registered', model, geoJson.properties.level);
     return true;
-    // if (model === 'RTOFS_GLOBAL') {
-    //   return geoJson.properties.level === '0 m below sea level';
-    // }
-    // return (
-    //   geoJson.properties.level === '10 m above ground' ||
-    //   geoJson.properties.level === 'surface'
-    // );
   });
   return {
     slicedGrib: `${folder}/small_${fileID}.grib2`,

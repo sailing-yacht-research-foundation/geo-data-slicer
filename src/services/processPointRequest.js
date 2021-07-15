@@ -7,10 +7,6 @@ const {
   noaaBuoyIndex,
   noaaBuoyPoints,
 } = require('./createSourceIndex');
-const {
-  getWeatherFilesByPoint,
-  getArchivedDataByPoint,
-} = require('./getArchivedData');
 const createShipReport = require('./createShipReport');
 const createWindfinderWind = require('./createWindfinderWind');
 const createNoaaBuoyWind = require('./createNoaaBuoyWind');
@@ -22,12 +18,6 @@ async function processPointRequest(
   webhook,
   webhookToken,
 ) {
-  const archivedPromise = getArchivedDataByPoint(
-    point,
-    startTimeUnixMS,
-    endTimeUnixMS,
-  );
-
   const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
 
   const [lon, lat] = point.geometry.coordinates;
@@ -53,13 +43,11 @@ async function processPointRequest(
     endTimeUnixMS,
   );
 
-  const [archivedData, shipReportsFull, windfinderWinds, noaaBuoyWinds] =
-    await Promise.all([
-      archivedPromise,
-      shipReportPromise,
-      windfinderPromise,
-      noaaBuoyPromise,
-    ]);
+  const [shipReportsFull, windfinderWinds, noaaBuoyWinds] = await Promise.all([
+    shipReportPromise,
+    windfinderPromise,
+    noaaBuoyPromise,
+  ]);
 
   let shipReports = shipReportsFull;
   if (shipReportsFull.features.length > 0) {
@@ -71,7 +59,6 @@ async function processPointRequest(
     method: 'POST',
     data: {
       token: webhookToken,
-      archivedData,
       shipReports,
       windfinderWinds,
       noaaBuoyWinds,

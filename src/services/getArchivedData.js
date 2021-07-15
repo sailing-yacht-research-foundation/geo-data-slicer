@@ -8,7 +8,6 @@ const turf = require('@turf/turf');
 const db = require('../models');
 const mainDB = require('../models/mainDB');
 const downloadFromS3 = require('../utils/downloadFromS3');
-const sliceGribByPoint = require('../utils/sliceGribByPoint');
 const sliceGribByRegion = require('../utils/sliceGribByRegion');
 const uploadStreamToS3 = require('../utils/uploadStreamToS3');
 
@@ -81,48 +80,6 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
           },
           end_time: {
             [Op.gte]: endDate,
-          },
-        },
-      ],
-    },
-    raw: true,
-  });
-  return downloadArchivedData(files);
-}
-
-async function getWeatherFilesByPoint(point, startTime, endTime) {
-  const query = `SELECT "model_name" FROM "SourceModels" WHERE ST_Contains ( "spatial_boundary", ST_GeomFromText ( :point, 4326 ) )`;
-  const result = await db.sequelize.query(query, {
-    replacements: {
-      point: `POINT (${point.geometry.coordinates[0]} ${point.geometry.coordinates[1]})`,
-    },
-    type: db.sequelize.QueryTypes.SELECT,
-  });
-
-  let modelsToFetch = ['GFS', 'RTOFS_GLOBAL', 'ARPEGE_WORLD'];
-  if (result.length > 0) {
-    modelsToFetch = [
-      ...modelsToFetch,
-      ...result.map((row) => {
-        return row.model_name;
-      }),
-    ];
-  }
-
-  const startDate = new Date(startTime);
-  const endDate = new Date(endTime);
-  const files = await db.weatherData.findAll({
-    where: {
-      model: { [Op.in]: modelsToFetch },
-      [Op.or]: [
-        {
-          start_time: {
-            [Op.between]: [startDate, endDate],
-          },
-        },
-        {
-          end_time: {
-            [Op.between]: [startDate, endDate],
           },
         },
       ],
@@ -217,26 +174,4 @@ async function getArchivedDataByRegion(roi, startTime, endTime) {
   return data;
 }
 
-async function getArchivedDataByPoint(point, startTime, endTime) {
-  const downloadedFiles = await getWeatherFilesByPoint(
-    point,
-    startTime,
-    endTime,
-  );
-  const data = await Promise.all(
-    downloadedFiles.map((row) => {
-      const { id, model, start_time, end_time, gribFilePath } = row;
-      const geojsons = sliceGribByPoint(point, gribFilePath, {
-        folder: path.resolve(__dirname, `../../`),
-        fileID: id,
-      });
-      return { id, model, start_time, end_time, geojsons };
-    }),
-  );
-  return data;
-}
-
-module.exports = {
-  getArchivedDataByRegion,
-  getArchivedDataByPoint,
-};
+module.exports = getArchivedDataByRegion;
