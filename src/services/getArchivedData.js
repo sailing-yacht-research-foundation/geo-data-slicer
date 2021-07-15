@@ -1,8 +1,16 @@
 const path = require('path');
+const fs = require('fs');
+const { v4: uuidv4 } = require('uuid');
+const { Readable } = require('stream');
+const execSync = require('child_process').execSync;
+const turf = require('@turf/turf');
+
 const db = require('../models');
+const mainDB = require('../models/mainDB');
 const downloadFromS3 = require('../utils/downloadFromS3');
 const sliceGribByPoint = require('../utils/sliceGribByPoint');
 const sliceGribByRegion = require('../utils/sliceGribByRegion');
+const uploadStreamToS3 = require('../utils/uploadStreamToS3');
 
 const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
@@ -61,12 +69,18 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
       [Op.or]: [
         {
           start_time: {
-            [Op.between]: [startDate, endDate],
+            [Op.lte]: startDate,
+          },
+          end_time: {
+            [Op.gte]: startDate,
           },
         },
         {
+          start_time: {
+            [Op.lte]: endDate,
+          },
           end_time: {
-            [Op.between]: [startDate, endDate],
+            [Op.gte]: endDate,
           },
         },
       ],
@@ -125,20 +139,82 @@ async function getArchivedDataByRegion(roi, startTime, endTime) {
     endTime,
   );
   // Slice GRIBs into regions using wgrib2 or cdo, then convert to geojson and (either upload gribs and geojson to s3 and save the record or send this info to the analysis engine so it can do it).
-  const jsonFiles = await Promise.all(
-    downloadedFiles.map((row) => {
+  const bbox = turf.bbox(roi);
+  const bboxPolygon = turf.bboxPolygon(bbox);
+
+  const data = await Promise.all(
+    downloadedFiles.map(async (row) => {
       const { id, model, start_time, end_time, gribFilePath } = row;
-      const geojsons = sliceGribByRegion(roi, gribFilePath, {
+      const { slicedGrib, geoJsons } = sliceGribByRegion(bbox, gribFilePath, {
         folder: path.resolve(__dirname, `../../`),
         fileID: id,
+        model,
       });
-      return { id, model, start_time, end_time, geojsons };
+
+      const gribStream = fs.createReadStream(slicedGrib);
+      const gribUuid = uuidv4();
+      const { writeStream: gribWriteStream, uploadPromise: gribUploadPromise } =
+        uploadStreamToS3(`gribs/${model}/${gribUuid}.grib2`);
+      gribStream.on('open', function () {
+        gribStream.pipe(gribWriteStream);
+      });
+      const gribDetail = await gribUploadPromise;
+      execSync(`rm ${slicedGrib}`);
+
+      const jsonFiles = await Promise.all(
+        geoJsons.map(async (json) => {
+          // write to stream
+          const uuid = uuidv4();
+          const { writeStream, uploadPromise } = uploadStreamToS3(
+            `geojson/${model}/${uuid}.json`,
+          );
+          const readable = Readable.from([JSON.stringify(json)]);
+          readable.pipe(writeStream);
+          const jsonDetail = await uploadPromise;
+          return { uuid, key: jsonDetail.Key };
+        }),
+      );
+
+      await mainDB.slicedWeather.bulkCreate(
+        [
+          {
+            id: gribUuid,
+            model,
+            start_time,
+            end_time,
+            s3_key: gribDetail.Key,
+            file_type: 'GRIB',
+            bounding_box: bboxPolygon.geometry,
+          },
+          ...jsonFiles.map((row) => {
+            return {
+              id: row.uuid,
+              model,
+              start_time,
+              end_time,
+              s3_key: row.key,
+              file_type: 'JSON',
+              bounding_box: bboxPolygon.geometry,
+            };
+          }),
+        ],
+        {
+          ignoreDuplicates: true,
+          validate: true,
+        },
+      );
+      return {
+        id,
+        model,
+        start_time,
+        end_time,
+        slicedGrib: gribDetail.Key,
+        geoJsons: jsonFiles,
+      };
     }),
   );
 
-  // Return with a either a list of sliced files in an s3 bucket just for sliced data, or actually return the geojson objects with time and boundary info.
-
-  return jsonFiles;
+  return data;
 }
 
 async function getArchivedDataByPoint(point, startTime, endTime) {
