@@ -132,7 +132,12 @@ async function requestWindfinderReport(spotID, token) {
   return reports;
 }
 
-async function createWindfinderWind(spots, startTimeUnixMS, endTimeUnixMS) {
+async function createWindfinderWind(
+  spots,
+  startTimeUnixMS,
+  endTimeUnixMS,
+  stopOnFirstReport = false,
+) {
   const startTime = new Date(startTimeUnixMS);
   const endTime = new Date(endTimeUnixMS);
   const windfinderReports = [];
@@ -166,6 +171,9 @@ async function createWindfinderWind(spots, startTimeUnixMS, endTimeUnixMS) {
             lat,
             reports: slicedReports,
           });
+          if (stopOnFirstReport) {
+            break;
+          }
         }
       }
     }

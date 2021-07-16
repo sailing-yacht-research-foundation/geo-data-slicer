@@ -1,5 +1,6 @@
 const axios = require('axios');
 const turf = require('@turf/turf');
+const geokdbush = require('geokdbush');
 
 const {
   windfinderIndex,
@@ -20,25 +21,31 @@ async function processPointRequest(
 ) {
   const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
 
+  // TODO: Use geokdbush to find nearest after we scrape for windfinder and noaa buoys
+  // Need to scrape first, cause what we get might not be weather station (windfinder, no data we want) or no data available for the past hours (buoy)
   const [lon, lat] = point.geometry.coordinates;
   // This will get spots based on precise location
   // Will have to increase radius to allow less precision
-  const spots = windfinderIndex
-    .within(lon, lat, 0)
-    .map((id) => windfinderPoints[id]);
+  // const spots = windfinderIndex
+  //   .within(lon, lat, 0)
+  //   .map((id) => windfinderPoints[id]);
+
+  const nearestSpots = geokdbush.around(windfinderIndex, lon, lat, 200); // Shouldn't matter if we fetch 200 nearest here, below function should stop when a weather station is found
   const windfinderPromise = createWindfinderWind(
-    spots,
+    nearestSpots,
     startTimeUnixMS,
     endTimeUnixMS,
+    true, // stop when finding weather stations
   );
 
   // This will get spots based on precise location
   // Will have to increase radius to allow less precision
-  const buoys = noaaBuoyIndex
-    .within(lon, lat, 0)
-    .map((id) => noaaBuoyPoints[id]);
+  // const buoys = noaaBuoyIndex
+  //   .within(lon, lat, 0)
+  //   .map((id) => noaaBuoyPoints[id]);
+  const nearestBuoys = geokdbush.around(noaaBuoyIndex, lon, lat, 20);
   const noaaBuoyPromise = createNoaaBuoyWind(
-    buoys,
+    nearestBuoys,
     startTimeUnixMS,
     endTimeUnixMS,
   );

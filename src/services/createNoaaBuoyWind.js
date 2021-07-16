@@ -20,7 +20,12 @@ async function getAvailableStation() {
   return stationList;
 }
 
-const createNoaaBuoyWind = async (buoys, startTimeUnixMS, endTimeUnixMS) => {
+const createNoaaBuoyWind = async (
+  buoys,
+  startTimeUnixMS,
+  endTimeUnixMS,
+  stopOnFirstReport = false,
+) => {
   const startTime = new Date(startTimeUnixMS);
   const endTime = new Date(endTimeUnixMS);
   const availableStations = await getAvailableStation();
@@ -79,6 +84,9 @@ const createNoaaBuoyWind = async (buoys, startTimeUnixMS, endTimeUnixMS) => {
         buoyUrl,
         reports,
       });
+      if (stopOnFirstReport) {
+        break;
+      }
     } catch (error) {
       console.log('current station:', station, response);
       console.error(error.message);
