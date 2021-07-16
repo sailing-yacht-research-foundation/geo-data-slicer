@@ -39,7 +39,7 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const startDate = new Date(startTime);
   const endDate = new Date(endTime);
   const files = await db.weatherData.findAll({
-    limit: 5, //TODO: Remove limit for testing
+    // limit: 5, //TODO: Remove limit after testing
     where: {
       model: { [Op.in]: modelsToFetch },
       [Op.or]: [
@@ -82,7 +82,7 @@ async function getArchivedData(roi, startTime, endTime) {
       try {
         await downloadFromS3(bucketName, grib_file_url, downloadPath);
       } catch (error) {
-        console.log(error.message);
+        console.log('Error downloading grib', error.message);
         return [];
       }
 
@@ -135,7 +135,6 @@ async function getArchivedData(roi, startTime, endTime) {
             const readable = Readable.from([JSON.stringify(json)]);
             readable.pipe(writeStream);
             const jsonDetail = await uploadPromise;
-            console.log(id, uuid);
             return {
               uuid,
               key: jsonDetail.Key,
