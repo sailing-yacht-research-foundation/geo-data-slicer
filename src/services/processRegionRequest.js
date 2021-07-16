@@ -7,10 +7,7 @@ const {
   noaaBuoyIndex,
   noaaBuoyPoints,
 } = require('./createSourceIndex');
-const {
-  getWeatherFilesByRegion,
-  getArchivedDataByRegion,
-} = require('./getArchivedData');
+const getArchivedData = require('./getArchivedData');
 const createShipReport = require('./createShipReport');
 const createWindfinderWind = require('./createWindfinderWind');
 const createNoaaBuoyWind = require('./createNoaaBuoyWind');
@@ -23,11 +20,7 @@ async function processRegionRequest(
   webhookToken,
   updateFrequencyMinutes,
 ) {
-  const archivedPromise = getArchivedDataByRegion(
-    roi,
-    startTimeUnixMS,
-    endTimeUnixMS,
-  );
+  const archivedPromise = getArchivedData(roi, startTimeUnixMS, endTimeUnixMS);
 
   const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
 

@@ -2,7 +2,6 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { Readable } = require('stream');
-const execSync = require('child_process').execSync;
 const turf = require('@turf/turf');
 
 const db = require('../models');
@@ -13,29 +12,6 @@ const uploadStreamToS3 = require('../utils/uploadStreamToS3');
 
 const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
-
-async function downloadArchivedData(files) {
-  // Download said s3 files.
-  const downloadedFiles = await Promise.all(
-    files.map(async (row) => {
-      const { id, model, start_time, end_time, grib_file_url } = row;
-      const downloadPath = path.resolve(__dirname, `../../${id}.grib2`);
-      const downloadResult = await downloadFromS3(
-        bucketName,
-        grib_file_url,
-        downloadPath,
-      );
-      return {
-        id,
-        model,
-        start_time,
-        end_time,
-        gribFilePath: downloadResult ? downloadPath : null,
-      };
-    }),
-  );
-  return downloadedFiles;
-}
 
 async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const query = `SELECT "model_name" FROM "SourceModels" WHERE ST_Contains ( "spatial_boundary", ST_GeomFromText ( :polygon, 4326 ) )`;
@@ -63,6 +39,7 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const startDate = new Date(startTime);
   const endDate = new Date(endTime);
   const files = await db.weatherData.findAll({
+    limit: 5, //TODO: Remove limit for testing
     where: {
       model: { [Op.in]: modelsToFetch },
       [Op.or]: [
@@ -86,92 +63,111 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
     },
     raw: true,
   });
-  return downloadArchivedData(files);
+  return files;
 }
 
-async function getArchivedDataByRegion(roi, startTime, endTime) {
-  const downloadedFiles = await getWeatherFilesByRegion(
-    roi,
-    startTime,
-    endTime,
-  );
-  // Slice GRIBs into regions using wgrib2 or cdo, then convert to geojson and (either upload gribs and geojson to s3 and save the record or send this info to the analysis engine so it can do it).
+async function getArchivedData(roi, startTime, endTime) {
+  const files = await getWeatherFilesByRegion(roi, startTime, endTime);
+
   const bbox = turf.bbox(roi);
   const bboxPolygon = turf.bboxPolygon(bbox);
 
   const data = await Promise.all(
-    downloadedFiles.map(async (row) => {
-      const { id, model, start_time, end_time, gribFilePath } = row;
-      const { slicedGrib, geoJsons } = sliceGribByRegion(bbox, gribFilePath, {
-        folder: path.resolve(__dirname, `../../`),
+    files.map(async (row) => {
+      const { id, model, start_time, end_time, grib_file_url } = row;
+      const downloadPath = path.resolve(
+        __dirname,
+        `../../operating_folder/${id}.grib2`,
+      );
+      try {
+        await downloadFromS3(bucketName, grib_file_url, downloadPath);
+      } catch (error) {
+        console.log(error.message);
+        return [];
+      }
+
+      const { slicedGrib, geoJsons } = sliceGribByRegion(bbox, downloadPath, {
+        folder: path.resolve(__dirname, `../../operating_folder/`),
         fileID: id,
         model,
       });
-
+      // Smaller Grib upload process
+      let gribDetail = null;
       const gribStream = fs.createReadStream(slicedGrib);
       const gribUuid = uuidv4();
-      const { writeStream: gribWriteStream, uploadPromise: gribUploadPromise } =
-        uploadStreamToS3(`gribs/${model}/${gribUuid}.grib2`);
-      gribStream.on('open', function () {
-        gribStream.pipe(gribWriteStream);
-      });
-      const gribDetail = await gribUploadPromise;
-      execSync(`rm ${slicedGrib}`);
+      try {
+        const {
+          writeStream: gribWriteStream,
+          uploadPromise: gribUploadPromise,
+        } = uploadStreamToS3(`gribs/${model}/${gribUuid}.grib2`);
+        gribStream.on('open', function () {
+          gribStream.pipe(gribWriteStream);
+        });
+        gribDetail = await gribUploadPromise;
+      } catch (error) {
+        console.log('Error uploading grib', error.message);
+      }
 
+      fs.unlink(slicedGrib, () => {
+        console.log(`sliced grib of model ${model}-${id} has been deleted`);
+      });
+      // End of Smaller grib upload process
+
+      // GeoJSON stream to s3
       const jsonFiles = await Promise.all(
         geoJsons.map(async (json) => {
-          // write to stream
-          const uuid = uuidv4();
-          const { writeStream, uploadPromise } = uploadStreamToS3(
-            `geojson/${model}/${uuid}.json`,
-          );
-          const readable = Readable.from([JSON.stringify(json)]);
-          readable.pipe(writeStream);
-          const jsonDetail = await uploadPromise;
-          return { uuid, key: jsonDetail.Key };
+          try {
+            const uuid = uuidv4();
+            const { writeStream, uploadPromise } = uploadStreamToS3(
+              `geojson/${model}/${uuid}.json`,
+            );
+            const readable = Readable.from([JSON.stringify(json)]);
+            readable.pipe(writeStream);
+            const jsonDetail = await uploadPromise;
+            return { uuid, key: jsonDetail.Key };
+          } catch (error) {
+            return null;
+          }
         }),
       );
-
-      await mainDB.slicedWeather.bulkCreate(
-        [
-          {
-            id: gribUuid,
+      // End of geojson stream to s3
+      // Saving to DB
+      const successJsons = jsonFiles.filter((row) => row !== null);
+      const arrayData = [
+        ...(gribDetail
+          ? [
+              {
+                id: gribUuid,
+                model,
+                start_time,
+                end_time,
+                s3_key: gribDetail.Key,
+                file_type: 'GRIB',
+                bounding_box: bboxPolygon.geometry,
+              },
+            ]
+          : []),
+        ...successJsons.map((row) => {
+          return {
+            id: row.uuid,
             model,
             start_time,
             end_time,
-            s3_key: gribDetail.Key,
-            file_type: 'GRIB',
+            s3_key: row.key,
+            file_type: 'JSON',
             bounding_box: bboxPolygon.geometry,
-          },
-          ...jsonFiles.map((row) => {
-            return {
-              id: row.uuid,
-              model,
-              start_time,
-              end_time,
-              s3_key: row.key,
-              file_type: 'JSON',
-              bounding_box: bboxPolygon.geometry,
-            };
-          }),
-        ],
-        {
-          ignoreDuplicates: true,
-          validate: true,
-        },
-      );
-      return {
-        id,
-        model,
-        start_time,
-        end_time,
-        slicedGrib: gribDetail.Key,
-        geoJsons: jsonFiles,
-      };
+          };
+        }),
+      ];
+      await mainDB.slicedWeather.bulkCreate(arrayData, {
+        ignoreDuplicates: true,
+        validate: true,
+      });
+      return successJsons.map((row) => row.key);
     }),
   );
 
-  return data;
+  return data.flat();
 }
 
-module.exports = getArchivedDataByRegion;
+module.exports = getArchivedData;

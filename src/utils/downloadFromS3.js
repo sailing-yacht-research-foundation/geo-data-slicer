@@ -11,11 +11,13 @@ async function downloadFromS3(bucket, key, downloadPath) {
     Bucket: bucket,
     Key: key,
   };
-  let file = fs.createWriteStream(downloadPath);
-  const data = s3.getObject(params).createReadStream();
+
   return new Promise((resolve, reject) => {
+    let file = fs.createWriteStream(downloadPath);
+    const data = s3.getObject(params).createReadStream();
     const errorHandler = (err) => {
       file.destroy();
+      fs.unlinkSync(downloadPath);
       reject(err);
     };
     data
