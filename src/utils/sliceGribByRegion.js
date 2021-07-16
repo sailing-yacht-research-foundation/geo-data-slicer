@@ -8,7 +8,7 @@ const INCLUDED_LEVELS = {
   ARPEGE_WORLD: [
     // 'mean sea level',
     '10 m above ground',
-    '2 m above ground',
+    // '2 m above ground', // Contains TMP & RH for 2 m above ground, ignoring
     // 'atmos col',
     'surface',
   ],
@@ -18,15 +18,18 @@ const INCLUDED_LEVELS = {
   AROME_FRANCE: [
     // 'mean sea level',
     '10 m above ground',
-    '2 m above ground',
+    // '2 m above ground',
     // 'atmos col',
     'surface',
   ],
-  AROME_FRANCE_HD: ['10 m above ground', '2 m above ground'],
+  AROME_FRANCE_HD: [
+    '10 m above ground',
+    // '2 m above ground'
+  ],
   ARPEGE_EUROPE: [
     // 'mean sea level',
     '10 m above ground',
-    '2 m above ground',
+    // '2 m above ground',
     // 'atmos col',
     'surface',
   ],

@@ -183,10 +183,14 @@ async function getArchivedData(roi, startTime, endTime) {
           };
         }),
       ];
-      await mainDB.slicedWeather.bulkCreate(arrayData, {
-        ignoreDuplicates: true,
-        validate: true,
-      });
+      try {
+        await mainDB.slicedWeather.bulkCreate(arrayData, {
+          ignoreDuplicates: true,
+          validate: true,
+        });
+      } catch (error) {
+        console.log('Error saving metadata to DB', error.message);
+      }
       return successJsons.map((row) => row.key);
     }),
   );
