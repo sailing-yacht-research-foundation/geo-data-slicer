@@ -31,6 +31,22 @@ module.exports = (sequelize, Sequelize) => {
         type: Sequelize.GEOMETRY('POLYGON', 4326),
         allowNull: false,
       },
+      levels: {
+        type: Sequelize.ARRAY(Sequelize.STRING),
+        allowNull: false,
+      },
+      variables: {
+        type: Sequelize.ARRAY(Sequelize.STRING),
+        allowNull: false,
+      },
+      runtimes: {
+        type: Sequelize.ARRAY(Sequelize.DATE),
+        allowNull: false,
+      },
+      race_id: {
+        type: Sequelize.UUID,
+        allowNull: true,
+      },
     },
     {
       tableName: 'SlicedWeathers',

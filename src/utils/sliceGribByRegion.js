@@ -56,7 +56,18 @@ function sliceGribByRegion(bbox, filename, options) {
   const parsedData = parseCsvData(csvData);
   const geoJsons = makeGeoJsons(parsedData);
 
+  const levels = new Set();
+  const runtimes = new Set();
+  const variables = new Set();
+
   const finalResult = geoJsons.filter((geoJson) => {
+    levels.add(geoJson.properties.level);
+    runtimes.add(`${geoJson.properties.time}+00`);
+    if (geoJson.features[0]) {
+      for (const variable in geoJson.features[0].properties) {
+        variables.add(variable);
+      }
+    }
     if (INCLUDED_LEVELS[model]) {
       return INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1;
     }
@@ -65,6 +76,9 @@ function sliceGribByRegion(bbox, filename, options) {
   return {
     slicedGrib: `${folder}/small_${fileID}.grib2`,
     geoJsons: finalResult,
+    levels: Array.from(levels),
+    variables: Array.from(variables),
+    runtimes: Array.from(runtimes),
   };
 }
 

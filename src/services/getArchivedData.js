@@ -86,11 +86,12 @@ async function getArchivedData(roi, startTime, endTime) {
         return [];
       }
 
-      const { slicedGrib, geoJsons } = sliceGribByRegion(bbox, downloadPath, {
-        folder: path.resolve(__dirname, `../../operating_folder/`),
-        fileID: id,
-        model,
-      });
+      const { slicedGrib, geoJsons, levels, variables, runtimes } =
+        sliceGribByRegion(bbox, downloadPath, {
+          folder: path.resolve(__dirname, `../../operating_folder/`),
+          fileID: id,
+          model,
+        });
       // Smaller Grib upload process
       let gribDetail = null;
       const gribStream = fs.createReadStream(slicedGrib);
@@ -118,14 +119,32 @@ async function getArchivedData(roi, startTime, endTime) {
         geoJsons.map(async (json) => {
           try {
             const uuid = uuidv4();
+
+            const gsVariables = new Set();
+            const gsLevels = [json.properties.level];
+            const gsTimes = [`${json.properties.time}+00`];
+            if (json.features[0]) {
+              for (const variable in json.features[0].properties) {
+                gsVariables.add(variable);
+              }
+            }
+
             const { writeStream, uploadPromise } = uploadStreamToS3(
               `geojson/${model}/${uuid}.json`,
             );
             const readable = Readable.from([JSON.stringify(json)]);
             readable.pipe(writeStream);
             const jsonDetail = await uploadPromise;
-            return { uuid, key: jsonDetail.Key };
+            console.log(id, uuid);
+            return {
+              uuid,
+              key: jsonDetail.Key,
+              levels: gsLevels,
+              runtimes: gsTimes,
+              variables: Array.from(gsVariables),
+            };
           } catch (error) {
+            console.log(error);
             return null;
           }
         }),
@@ -144,6 +163,9 @@ async function getArchivedData(roi, startTime, endTime) {
                 s3_key: gribDetail.Key,
                 file_type: 'GRIB',
                 bounding_box: bboxPolygon.geometry,
+                levels,
+                variables,
+                runtimes,
               },
             ]
           : []),
@@ -156,6 +178,9 @@ async function getArchivedData(roi, startTime, endTime) {
             s3_key: row.key,
             file_type: 'JSON',
             bounding_box: bboxPolygon.geometry,
+            levels: row.levels,
+            variables: row.variables,
+            runtimes: row.runtimes,
           };
         }),
       ];
