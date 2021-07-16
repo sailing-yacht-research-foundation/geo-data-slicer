@@ -5,7 +5,7 @@ function parseCsvData(csvData) {
     const lineComponents = line.split(',');
     if (lineComponents.length == 7) {
       data.push({
-        time: lineComponents[0],
+        time: lineComponents[1], // 0 is reference time
         variable: lineComponents[2].replace(/"/gm, ''),
         level: lineComponents[3],
         lon: lineComponents[4],
