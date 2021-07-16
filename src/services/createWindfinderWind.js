@@ -171,9 +171,9 @@ async function createWindfinderWind(
             lat,
             reports: slicedReports,
           });
-          if (stopOnFirstReport) {
-            break;
-          }
+        }
+        if (stopOnFirstReport) {
+          break;
         }
       }
     }
