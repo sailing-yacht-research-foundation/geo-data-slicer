@@ -19,8 +19,14 @@ async function processRegionRequest(
   webhook,
   webhookToken,
   updateFrequencyMinutes,
+  raceID,
 ) {
-  const archivedPromise = getArchivedData(roi, startTimeUnixMS, endTimeUnixMS);
+  const archivedPromise = getArchivedData(
+    roi,
+    startTimeUnixMS,
+    endTimeUnixMS,
+    raceID,
+  );
 
   const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
 

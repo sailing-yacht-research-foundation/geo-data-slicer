@@ -66,7 +66,7 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   return files;
 }
 
-async function getArchivedData(roi, startTime, endTime) {
+async function getArchivedData(roi, startTime, endTime, raceID) {
   const files = await getWeatherFilesByRegion(roi, startTime, endTime);
 
   const bbox = turf.bbox(roi);
@@ -165,6 +165,7 @@ async function getArchivedData(roi, startTime, endTime) {
                 levels,
                 variables,
                 runtimes,
+                race_id: raceID,
               },
             ]
           : []),
@@ -180,6 +181,7 @@ async function getArchivedData(roi, startTime, endTime) {
             levels: row.levels,
             variables: row.variables,
             runtimes: row.runtimes,
+            race_id: raceID,
           };
         }),
       ];

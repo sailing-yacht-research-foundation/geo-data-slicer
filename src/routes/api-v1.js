@@ -5,16 +5,28 @@ const processPointRequest = require('../services/processPointRequest');
 
 var router = express.Router();
 
+/*
+roi -> polygon
+startTimeUnixMS -> millis
+endTimeUnixMS -> millis
+webhook -> url of webhook
+webhookToken -> Auth of webhook?
+updateFrequencyMinutes -> TODO: Are we going to use this, or just let analysis engine re-ping when they need the data
+payload -> Adding this for race id, since right now we only save metadata without the race id. Other related data should be added here later.
+*/
 router.post('/', async function (request, response) {
-  const roi = request.body.roi;
-  const startTimeUnixMS = request.body.startTimeUnixMS;
-  const endTimeUnixMS = request.body.endTimeUnixMS;
-  // Where should we send the data?
-  const webhook = request.body.webhook;
-  const webhookToken = request.body.webhookToken;
+  const {
+    roi,
+    startTimeUnixMS,
+    endTimeUnixMS,
+    webhook,
+    webhookToken,
+    updateFrequencyMinutes,
+    payload,
+  } = request.body;
 
-  // How often should we check the real time sources for new data?
-  const updateFrequencyMinutes = request.body.updateFrequencyMinutes;
+  // Payload
+  const raceID = payload.raceID ? payload.raceID : null;
 
   processRegionRequest(
     roi,
@@ -23,6 +35,7 @@ router.post('/', async function (request, response) {
     webhook,
     webhookToken,
     updateFrequencyMinutes,
+    raceID,
   );
   response.send('ok');
 });
