@@ -1,5 +1,6 @@
 const execSync = require('child_process').execSync;
 const dayjs = require('dayjs');
+const fs = require('fs');
 
 const makeGeoJsons = require('./makeGeoJsons');
 const customParseFormat = require('dayjs/plugin/customParseFormat');
@@ -11,7 +12,7 @@ function sliceGribByPoint(point, filename) {
   const data = execSync(
     `wgrib2 ${filename} -VT -var -lev -lon ${lon} ${lat}`,
   ).toString();
-  execSync(`rm ${filename}`);
+  fs.unlinkSync(filename);
   const rows = data.split('\n');
   const finalData = [];
   rows.forEach((row) => {
