@@ -31,6 +31,7 @@ async function processPointRequest(
     nearestBuoys,
     startTimeUnixMS,
     endTimeUnixMS,
+    true,
   );
 
   const [shipReportsFull, windfinderWinds, noaaBuoyWinds] = await Promise.all([
