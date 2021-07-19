@@ -9,7 +9,7 @@ describe('Function to parse csv to processable data', () => {
     const result = parseCsvData(csvData);
     expect(result).toEqual([
       {
-        time: '2021-06-24 18:00:00',
+        time: '2021-06-29 16:00:00',
         variable: 'UGRD',
         level: '10 m above ground',
         lon: '0',
@@ -17,7 +17,7 @@ describe('Function to parse csv to processable data', () => {
         value: -3.63023,
       },
       {
-        time: '2021-06-24 18:00:00',
+        time: '2021-06-29 16:00:00',
         variable: 'UGRD',
         level: '10 m above ground',
         lon: '0.25',
@@ -25,7 +25,7 @@ describe('Function to parse csv to processable data', () => {
         value: -3.62023,
       },
       {
-        time: '2021-06-24 18:00:00',
+        time: '2021-06-29 16:00:00',
         variable: 'UGRD',
         level: '10 m above ground',
         lon: '0.5',
