@@ -12,6 +12,7 @@ const uploadStreamToS3 = require('../utils/uploadStreamToS3');
 
 const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
+const slicedBucket = process.env.AWS_S3_SLICED_BUCKET;
 
 async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const query = `SELECT "model_name" FROM "SourceModels" WHERE ST_Contains ( "spatial_boundary", ST_GeomFromText ( :polygon, 4326 ) )`;
@@ -100,7 +101,7 @@ async function getArchivedData(roi, startTime, endTime, raceID) {
         const {
           writeStream: gribWriteStream,
           uploadPromise: gribUploadPromise,
-        } = uploadStreamToS3(`gribs/${model}/${gribUuid}.grib2`);
+        } = uploadStreamToS3(`gribs/${model}/${gribUuid}.grib2`, slicedBucket);
         gribStream.on('open', function () {
           gribStream.pipe(gribWriteStream);
         });
@@ -131,6 +132,7 @@ async function getArchivedData(roi, startTime, endTime, raceID) {
 
             const { writeStream, uploadPromise } = uploadStreamToS3(
               `geojson/${model}/${uuid}.json`,
+              slicedBucket,
             );
             const readable = Readable.from([JSON.stringify(json)]);
             readable.pipe(writeStream);
