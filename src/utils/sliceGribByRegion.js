@@ -53,9 +53,9 @@ function sliceGribByRegion(bbox, filename, options) {
   execSync(
     `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
   );
-  execSync(`rm ${filename}`);
+  fs.unlinkSync(filename);
   const csvData = fs.readFileSync(`${folder}/${fileID}.csv`, 'utf-8');
-  execSync(`rm ${folder}/${fileID}.csv`);
+  fs.unlinkSync(`${folder}/${fileID}.csv`);
   const parsedData = parseCsvData(csvData);
   const geoJsons = makeGeoJsons(parsedData);
 
