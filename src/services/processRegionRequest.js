@@ -21,7 +21,6 @@ async function processRegionRequest(
   updateFrequencyMinutes,
   raceID,
 ) {
-  console.log('actually called');
   const archivedPromise = getArchivedData(
     roi,
     startTimeUnixMS,

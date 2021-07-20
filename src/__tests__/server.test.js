@@ -26,7 +26,21 @@ describe('HTTP Server for Geo Data Slicer', () => {
       });
   });
 
-  test('POST /api/v1 [Weather for Region of Interest] - Invalid', (done) => {
+  test('POST /api/v1 [Weather for Region of Interest] - Missing Required Fields', (done) => {
+    supertest(app)
+      .post('/api/v1')
+      .send({})
+      .expect(400)
+      .then((response) => {
+        expect(response.text).toBe(
+          JSON.stringify({
+            message:
+              'Fields required: roi, startTimeUnixMS, endTimeUnixMS, webhook',
+          }),
+        );
+        done();
+      });
+
     supertest(app)
       .post('/api/v1')
       .send({
@@ -87,9 +101,6 @@ describe('HTTP Server for Geo Data Slicer', () => {
         webhook: 'https://webhook.site/some/path',
         webhookToken: 'webhookToken',
         updateFrequencyMinutes: 60,
-        payload: {
-          raceID: 'a1ed42f4-eb5d-4a62-8667-073ec256f6ab',
-        },
       })
       .expect(400)
       .then((response) => {
@@ -138,8 +149,71 @@ describe('HTTP Server for Geo Data Slicer', () => {
       });
   });
 
-  test('POST /api/v1 [Weather for Region of Interest] - Success', (done) => {
+  test('POST /api/v1 [Weather for Region of Interest] - Invalid Fields', (done) => {
     supertest(app)
+      .post('/api/v1')
+      .send({
+        roi: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Point',
+            coordinates: [-3.6, 53.6],
+          },
+        },
+        startTimeUnixMS: 1626660309015,
+        endTimeUnixMS: 1626663909015,
+        webhook: 'https://webhook.site/some/path',
+      })
+      .expect(400)
+      .then((response) => {
+        expect(response.text).toBe(
+          JSON.stringify({
+            message: 'Invalid roi: Wrong geometry type provided',
+          }),
+        );
+        done();
+      });
+
+    supertest(app)
+      .post('/api/v1')
+      .send({
+        roi: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-4.625244140625, 53.28492154619624],
+                [-2.98828125, 53.28492154619624],
+                [-2.98828125, 54.28446875235516],
+                [-4.625244140625, 54.28446875235516],
+                [-4.625244140625, 53.28492154619624],
+              ],
+            ],
+          },
+        },
+        startTimeUnixMS: 1626660309015,
+        endTimeUnixMS: 1626663909015,
+        webhook: 'https://webhook.site/some/path',
+        payload: {
+          raceID: 'random-stuff',
+        },
+      })
+      .expect(400)
+      .then((response) => {
+        expect(response.text).toBe(
+          JSON.stringify({
+            message: 'Invalid format: raceID',
+          }),
+        );
+        done();
+      });
+  });
+
+  test('POST /api/v1 [Weather for Region of Interest] - Success', async () => {
+    const response = await supertest(app)
       .post('/api/v1')
       .send({
         roi: {
@@ -167,12 +241,37 @@ describe('HTTP Server for Geo Data Slicer', () => {
           raceID: 'a1ed42f4-eb5d-4a62-8667-073ec256f6ab',
         },
       })
-      .expect(200)
-      .then((response) => {
-        expect(response.text).toBe('ok');
-        expect(processRegionRequest).toHaveBeenCalledTimes(1);
-        done();
-      });
+      .expect(200);
+    expect(response.text).toBe('ok');
+    expect(processRegionRequest).toHaveBeenCalledTimes(1);
+
+    const response2 = await supertest(app)
+      .post('/api/v1')
+      .send({
+        roi: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-4.625244140625, 53.28492154619624],
+                [-2.98828125, 53.28492154619624],
+                [-2.98828125, 54.28446875235516],
+                [-4.625244140625, 54.28446875235516],
+                [-4.625244140625, 53.28492154619624],
+              ],
+            ],
+          },
+        },
+        startTimeUnixMS: 1626660309015,
+        endTimeUnixMS: 1626663909015,
+        webhook: 'https://webhook.site/some/path',
+      })
+      .expect(200);
+
+    expect(response2.text).toBe('ok');
+    expect(processRegionRequest).toHaveBeenCalledTimes(2);
   });
 
   test('POST /api/v1 [Weather for Point of Interest] - Invalid', (done) => {

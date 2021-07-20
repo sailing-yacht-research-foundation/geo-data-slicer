@@ -1,3 +1,5 @@
+const isValidPolygon = require('../utils/isValidPolygon');
+
 module.exports = function (req, res, next) {
   const requiredFields = ['roi', 'startTimeUnixMS', 'endTimeUnixMS', 'webhook'];
   const missingFields = requiredFields.filter((field) => {
@@ -5,17 +7,14 @@ module.exports = function (req, res, next) {
       return true;
     }
   });
-  let invalid = false;
   let message = '';
   if (missingFields.length > 0) {
-    invalid = true;
     message = `Fields required: ${missingFields.join(', ')}`;
   }
 
   if (req.body.payload) {
     const { raceID } = req.body.payload;
     if (!raceID) {
-      invalid = true;
       message = 'Payload defined, required: raceID';
     } else {
       if (
@@ -23,13 +22,19 @@ module.exports = function (req, res, next) {
           /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
         )
       ) {
-        invalid = true;
         message = 'Invalid format: raceID';
       }
     }
   }
 
-  if (invalid) {
+  if (req.body.roi) {
+    const { valid, message: vpMessage } = isValidPolygon(req.body.roi);
+    if (!valid) {
+      message = `Invalid roi: ${vpMessage}`;
+    }
+  }
+
+  if (message !== '') {
     res.status(400).json({ message });
   } else {
     next();
