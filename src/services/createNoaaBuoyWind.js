@@ -1,4 +1,5 @@
 const axios = require('axios');
+const logger = require('../logger');
 
 const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
 
@@ -88,8 +89,8 @@ const createNoaaBuoyWind = async (
         break;
       }
     } catch (error) {
-      console.log('current station:', station, response);
-      console.error(error.message);
+      logger.error(`Error scraping NOAA Buoy Wind: ${error.message}`);
+      logger.error(`Current Station: ${station}`);
     }
   }
 

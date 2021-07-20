@@ -9,6 +9,7 @@ const mainDB = require('../models/mainDB');
 const downloadFromS3 = require('../utils/downloadFromS3');
 const sliceGribByRegion = require('../utils/sliceGribByRegion');
 const uploadStreamToS3 = require('../utils/uploadStreamToS3');
+const logger = require('../logger');
 
 const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
@@ -83,7 +84,7 @@ async function getArchivedData(roi, startTime, endTime, raceID) {
       try {
         await downloadFromS3(bucketName, grib_file_url, downloadPath);
       } catch (error) {
-        console.log('Error downloading grib', error.message);
+        logger.error(`Error downloading grib: ${error.message}`);
         return [];
       }
 
@@ -107,11 +108,11 @@ async function getArchivedData(roi, startTime, endTime, raceID) {
         });
         gribDetail = await gribUploadPromise;
       } catch (error) {
-        console.log('Error uploading grib', error.message);
+        logger.error(`Error uploading grib: ${error.message}`);
       }
 
       fs.unlink(slicedGrib, () => {
-        console.log(`sliced grib of model ${model}-${id} has been deleted`);
+        logger.info(`sliced grib of model ${model}-${id} has been deleted`);
       });
       // End of Smaller grib upload process
 
@@ -145,7 +146,7 @@ async function getArchivedData(roi, startTime, endTime, raceID) {
               variables: Array.from(gsVariables),
             };
           } catch (error) {
-            console.log(error);
+            logger.error(`Error uploading geojson: ${error.message}`);
             return null;
           }
         }),
@@ -193,7 +194,7 @@ async function getArchivedData(roi, startTime, endTime, raceID) {
           validate: true,
         });
       } catch (error) {
-        console.log('Error saving metadata to DB', error.message);
+        logger.error(`Error saving metadata to DB: ${error.message}`);
       }
       return successJsons.map((row) => row.key);
     }),

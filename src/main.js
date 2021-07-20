@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const db = require('./models');
 
+const logger = require('./logger');
 const createServer = require('./server');
 const port = process.env.PORT || 3000;
 
@@ -10,9 +11,9 @@ const port = process.env.PORT || 3000;
     const app = createServer();
     await db.sequelize.sync();
     app.listen(port, () => {
-      console.log(`Geo Data Slicer has started! Listening on ${port}`);
+      logger.info(`Geo Data Slicer has started! Listening on ${port}`);
     });
   } catch (error) {
-    console.log(error);
+    logger.error(`Error starting server: ${error.message}`);
   }
 })();

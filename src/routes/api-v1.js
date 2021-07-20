@@ -5,6 +5,7 @@ const validatePointRequest = require('../middlewares/validatePointRequest');
 
 const processRegionRequest = require('../services/processRegionRequest');
 const processPointRequest = require('../services/processPointRequest');
+const logger = require('../logger');
 
 var router = express.Router();
 
@@ -41,6 +42,7 @@ router.post('/', validateRegionRequest, async function (request, response) {
     raceID,
   );
   response.send('ok');
+  logger.info('Region request received & processed');
 });
 
 router.post('/point', validatePointRequest, async function (request, response) {
@@ -55,6 +57,7 @@ router.post('/point', validatePointRequest, async function (request, response) {
     webhookToken,
   );
   response.send('ok');
+  logger.info('Point request received & processed');
 });
 
 module.exports = router;
