@@ -274,20 +274,16 @@ describe('HTTP Server for Geo Data Slicer', () => {
     expect(processRegionRequest).toHaveBeenCalledTimes(2);
   });
 
-  test('POST /api/v1 [Weather for Point of Interest] - Invalid', (done) => {
+  test('POST /api/v1 [Weather for Point of Interest] - Missing Required Fields', (done) => {
     supertest(app)
       .post('/api/v1/point')
-      .send({
-        startTimeUnixMS: 1626660309015,
-        endTimeUnixMS: 1626663909015,
-        webhook: 'https://webhook.site/some/path',
-        webhookToken: 'webhookToken',
-      })
+      .send({})
       .expect(400)
       .then((response) => {
         expect(response.text).toBe(
           JSON.stringify({
-            message: 'Fields required: point',
+            message:
+              'Fields required: point, startTimeUnixMS, endTimeUnixMS, webhook',
           }),
         );
         done();
@@ -311,6 +307,39 @@ describe('HTTP Server for Geo Data Slicer', () => {
         expect(response.text).toBe(
           JSON.stringify({
             message: 'Fields required: startTimeUnixMS, endTimeUnixMS',
+          }),
+        );
+        done();
+      });
+  });
+
+  test('POST /api/v1 [Weather for Point of Interest] - Invalid Fields', (done) => {
+    supertest(app)
+      .post('/api/v1/point')
+      .send({
+        point: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-4.625244140625, 53.28492154619624],
+                [-2.98828125, 53.28492154619624],
+                [-2.98828125, 54.28446875235516],
+                [-4.625244140625, 54.28446875235516],
+                [-4.625244140625, 53.28492154619624],
+              ],
+            ],
+          },
+        },
+        webhook: 'https://webhook.site/some/path',
+      })
+      .expect(400)
+      .then((response) => {
+        expect(response.text).toBe(
+          JSON.stringify({
+            message: 'Invalid point: Wrong geometry type provided',
           }),
         );
         done();

@@ -1,4 +1,4 @@
-function isValidPolygon(data) {
+function isValidPoint(data) {
   const { geometry } = data;
   if (!geometry) {
     return {
@@ -6,7 +6,7 @@ function isValidPolygon(data) {
       message: 'No geometry propery can be found',
     };
   }
-  if (geometry.type !== 'Polygon') {
+  if (geometry.type !== 'Point') {
     return {
       valid: false,
       message: 'Wrong geometry type provided',
@@ -14,24 +14,18 @@ function isValidPolygon(data) {
   }
   if (
     Array.isArray(geometry.coordinates) &&
-    Array.isArray(geometry.coordinates[0])
+    geometry.coordinates.length === 2
   ) {
-    if (geometry.coordinates[0].length === 0) {
-      return {
-        valid: false,
-        message: 'Empty Coordinates',
-      };
-    }
+    return {
+      valid: true,
+      message: '',
+    };
   } else {
     return {
       valid: false,
       message: 'Coordinates invalid',
     };
   }
-  return {
-    valid: true,
-    message: '',
-  };
 }
 
-module.exports = isValidPolygon;
+module.exports = isValidPoint;

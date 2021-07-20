@@ -1,3 +1,5 @@
+const isValidPoint = require('../utils/isValidPoint');
+
 module.exports = function (req, res, next) {
   const requiredFields = [
     'point',
@@ -5,20 +7,26 @@ module.exports = function (req, res, next) {
     'endTimeUnixMS',
     'webhook',
   ];
+  let message = '';
   const missingFields = requiredFields.filter((field) => {
     if (!req.body[field]) {
       return true;
     }
   });
-  let invalid = false;
   if (missingFields.length > 0) {
-    invalid = true;
-    res.status(400).json({
-      message: `Fields required: ${missingFields.join(', ')}`,
-    });
+    message = `Fields required: ${missingFields.join(', ')}`;
   }
 
-  if (!invalid) {
+  if (req.body.point) {
+    const { valid, message: vpMessage } = isValidPoint(req.body.point);
+    if (!valid) {
+      message = `Invalid point: ${vpMessage}`;
+    }
+  }
+
+  if (message !== '') {
+    res.status(400).json({ message });
+  } else {
     next();
   }
 };
