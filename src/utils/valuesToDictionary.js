@@ -3,11 +3,7 @@ function format(valuesDictionary) {
   Object.keys(valuesDictionary).forEach((key) => {
     // Skip the first value since it's "ship"
     if (count > 0) {
-      try {
-        valuesDictionary[key] = parseFloat(valuesDictionary[key]);
-      } catch (err) {
-        valuesDictionary[key] = null;
-      }
+      valuesDictionary[key] = parseFloat(valuesDictionary[key]);
       if (isNaN(valuesDictionary[key])) {
         valuesDictionary[key] = null;
       }
