@@ -84,6 +84,42 @@ describe('HTTP Server for Geo Data Slicer', () => {
         );
         done();
       });
+
+    supertest(app)
+      .post('/api/v1')
+      .send({
+        roi: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-4.625244140625, 53.28492154619624],
+                [-2.98828125, 53.28492154619624],
+                [-2.98828125, 54.28446875235516],
+                [-4.625244140625, 54.28446875235516],
+                [-4.625244140625, 53.28492154619624],
+              ],
+            ],
+          },
+        },
+        startTimeUnixMS: 1626660309015,
+        endTimeUnixMS: 1626663909015,
+        webhook: 'https://webhook.site/some/path',
+        payload: {
+          raceID: 'random-stuff',
+        },
+      })
+      .expect(400)
+      .then((response) => {
+        expect(response.text).toBe(
+          JSON.stringify({
+            message: 'Invalid format: raceID',
+          }),
+        );
+        done();
+      });
   });
 
   test('POST /api/v1 [Weather for Region of Interest] - Success', (done) => {

@@ -29,7 +29,7 @@ router.post('/', validateRegionRequest, async function (request, response) {
   } = request.body;
 
   // Payload
-  const raceID = payload.raceID ? payload.raceID : null;
+  const raceID = payload ? payload.raceID : null;
 
   processRegionRequest(
     roi,
