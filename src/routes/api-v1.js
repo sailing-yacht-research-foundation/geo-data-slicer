@@ -1,5 +1,8 @@
 const express = require('express');
 
+const validateRegionRequest = require('../middlewares/validateRegionRequest');
+const validatePointRequest = require('../middlewares/validatePointRequest');
+
 const processRegionRequest = require('../services/processRegionRequest');
 const processPointRequest = require('../services/processPointRequest');
 
@@ -14,7 +17,7 @@ webhookToken -> Auth of webhook?
 updateFrequencyMinutes -> TODO: Are we going to use this, or just let analysis engine re-ping when they need the data
 payload -> Adding this for race id, since right now we only save metadata without the race id. Other related data should be added here later.
 */
-router.post('/', async function (request, response) {
+router.post('/', validateRegionRequest, async function (request, response) {
   const {
     roi,
     startTimeUnixMS,
@@ -40,12 +43,9 @@ router.post('/', async function (request, response) {
   response.send('ok');
 });
 
-router.post('/point', async function (request, response) {
-  const point = request.body.point;
-  const startTimeUnixMS = request.body.startTimeUnixMS;
-  const endTimeUnixMS = request.body.endTimeUnixMS;
-  const webhook = request.body.webhook;
-  const webhookToken = request.body.webhookToken;
+router.post('/point', validatePointRequest, async function (request, response) {
+  const { point, startTimeUnixMS, endTimeUnixMS, webhook, webhookToken } =
+    request.body;
 
   processPointRequest(
     point,
