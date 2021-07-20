@@ -26,7 +26,8 @@ RUN apt-get update \
     && apt-get autoremove
 RUN rm -f /usr/bin/python && ln -s /usr/bin/python3 /usr/bin/python
 
-RUN pip3 install pytesseract \
+RUN pip3 install Pillow \
+    && pip3 install pytesseract \
     && pip3 install python3-wget
 RUN apt-get update && apt-get install -y cron
 RUN apt-get install m4 -y
@@ -73,7 +74,7 @@ RUN cp grib2/wgrib2/wgrib2 /usr/local/bin \
 RUN cd /opt \
     && wget http://www.imagemagick.org/download/ImageMagick.tar.gz \
     && tar xvzf ImageMagick.tar.gz \
-    && cd ImageMagick-7.1.0-2 \
+    && cd ImageMagick-7.1.0-* \
     && touch configure \
     && ./configure \
     && make \
@@ -187,5 +188,9 @@ RUN export JAVA_HOME=/usr
 RUN export PATH=$PATH:/usr/lib/node_modules/weacast-grib2json/bin
 
 # Thank goodness we're done.
+
+# PM2 Process Manager
+RUN npm install pm2 -g
+
 WORKDIR /data
 CMD /bin/zsh

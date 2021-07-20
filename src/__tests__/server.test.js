@@ -26,6 +26,20 @@ describe('HTTP Server for Geo Data Slicer', () => {
       });
   });
 
+  test('GET /health [Health Check]', (done) => {
+    supertest(app)
+      .get('/health')
+      .expect(200)
+      .then((response) => {
+        const data = JSON.parse(response.text);
+        expect(data).toMatchObject({
+          message: 'OK',
+        });
+        expect(typeof data.timestamp).toBe('number');
+        done();
+      });
+  });
+
   test('POST /api/v1 [Weather for Region of Interest] - Missing Required Fields', (done) => {
     supertest(app)
       .post('/api/v1')

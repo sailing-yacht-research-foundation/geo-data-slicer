@@ -1,6 +1,7 @@
 const express = require('express');
 
 const apiV1 = require('./routes/api-v1');
+const healthcheckRoutes = require('./routes/healthcheck');
 
 function createServer() {
   const app = express();
@@ -11,6 +12,7 @@ function createServer() {
   });
 
   app.use('/api/v1', apiV1);
+  app.use('/health', healthcheckRoutes);
   return app;
 }
 
