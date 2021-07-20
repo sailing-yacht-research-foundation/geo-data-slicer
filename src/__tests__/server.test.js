@@ -30,20 +30,36 @@ describe('HTTP Server for Geo Data Slicer', () => {
     supertest(app)
       .post('/api/v1')
       .send({
+        roi: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-4.625244140625, 53.28492154619624],
+                [-2.98828125, 53.28492154619624],
+                [-2.98828125, 54.28446875235516],
+                [-4.625244140625, 54.28446875235516],
+                [-4.625244140625, 53.28492154619624],
+              ],
+            ],
+          },
+        },
         startTimeUnixMS: 1626660309015,
         endTimeUnixMS: 1626663909015,
         webhook: 'https://webhook.site/some/path',
         webhookToken: 'webhookToken',
         updateFrequencyMinutes: 60,
         payload: {
-          raceID: 'a1ed42f4-eb5d-4a62-8667-073ec256f6ab',
+          data: 'random stuff',
         },
       })
       .expect(400)
       .then((response) => {
         expect(response.text).toBe(
           JSON.stringify({
-            message: 'Fields required: roi',
+            message: 'Payload defined, required: raceID',
           }),
         );
         done();
