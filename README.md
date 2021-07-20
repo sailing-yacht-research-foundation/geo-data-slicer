@@ -16,7 +16,9 @@ You need to build the container
 After running the container, install the dependencies with `npm install`, and start the service with one of this way:
 
 - `npm run dev` to run on development mode using nodemon. Any changes to the source code will trigger reload on http server.
-- `pm2 start src/main.js` This will run the service with pm2, and restart the application whenever unhandled exception is thrown.
+- `pm2 start` This will run the service with pm2, and restart the application whenever unhandled exception is thrown.
+
+To stop pm2 service, run `pm2 stop geoslicer`
 
 ## Logs
 
