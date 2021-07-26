@@ -46,8 +46,17 @@ router.post('/', validateRegionRequest, async function (request, response) {
 });
 
 router.post('/point', validatePointRequest, async function (request, response) {
-  const { point, startTimeUnixMS, endTimeUnixMS, webhook, webhookToken } =
-    request.body;
+  const {
+    point,
+    startTimeUnixMS,
+    endTimeUnixMS,
+    webhook,
+    webhookToken,
+    payload,
+  } = request.body;
+
+  // Payload
+  const raceID = payload ? payload.raceID : null;
 
   processPointRequest(
     point,
@@ -55,6 +64,7 @@ router.post('/point', validatePointRequest, async function (request, response) {
     endTimeUnixMS,
     webhook,
     webhookToken,
+    raceID,
   );
   response.send('ok');
   logger.info('Point request received & processed');

@@ -13,6 +13,7 @@ async function processPointRequest(
   endTimeUnixMS,
   webhook,
   webhookToken,
+  raceID,
 ) {
   const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
 
@@ -49,6 +50,7 @@ async function processPointRequest(
     url: webhook,
     method: 'POST',
     data: {
+      raceID,
       token: webhookToken,
       shipReports,
       windfinderWinds,

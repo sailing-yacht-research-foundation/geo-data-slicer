@@ -358,6 +358,34 @@ describe('HTTP Server for Geo Data Slicer', () => {
         );
         done();
       });
+
+    supertest(app)
+      .post('/api/v1/point')
+      .send({
+        roi: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Point',
+            coordinates: [-3.6, 53.6],
+          },
+        },
+        startTimeUnixMS: 1626660309015,
+        endTimeUnixMS: 1626663909015,
+        webhook: 'https://webhook.site/some/path',
+        payload: {
+          raceID: 'random-stuff',
+        },
+      })
+      .expect(400)
+      .then((response) => {
+        expect(response.text).toBe(
+          JSON.stringify({
+            message: 'Invalid format: raceID',
+          }),
+        );
+        done();
+      });
   });
 
   test('POST /api/v1 [Weather for Point of Interest] - Success', (done) => {

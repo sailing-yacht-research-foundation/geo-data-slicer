@@ -41,7 +41,7 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const startDate = new Date(startTime);
   const endDate = new Date(endTime);
   const files = await db.weatherData.findAll({
-    // limit: 5, //TODO: Remove limit after testing
+    limit: 3, //TODO: Remove limit after testing
     where: {
       model: { [Op.in]: modelsToFetch },
       [Op.or]: [
@@ -196,7 +196,9 @@ async function getArchivedData(roi, startTime, endTime, raceID) {
       } catch (error) {
         logger.error(`Error saving metadata to DB: ${error.message}`);
       }
-      return successJsons.map((row) => row.key);
+      return successJsons.map((row) => {
+        return { key: row.key, model, levels, variables, runtimes };
+      });
     }),
   );
 

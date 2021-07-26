@@ -2,17 +2,11 @@ const express = require('express');
 const router = express.Router();
 
 router.get('/', function (req, res) {
-  const healthcheck = {
+  res.send({
     uptime: process.uptime(),
     message: 'OK',
     timestamp: Date.now(),
-  };
-  try {
-    res.send(healthcheck);
-  } catch (e) {
-    healthcheck.message = e;
-    res.status(503).send();
-  }
+  });
 });
 
 module.exports = router;
