@@ -73,8 +73,9 @@ const createNoaaBuoyWind = async (
               recordTime,
               // windDirectionTrue,
               // windSpeedMS,
-              gustMS,
-              pressureHPA,
+              gustMS: gustMS === 'MM' ? undefined : Number(gustMS),
+              pressureHPA:
+                pressureHPA === 'MM' ? undefined : Number(pressureHPA),
             });
           }
         }
