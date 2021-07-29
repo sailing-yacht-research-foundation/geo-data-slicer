@@ -10,10 +10,39 @@ const downloadFromS3 = require('../utils/downloadFromS3');
 const sliceGribByRegion = require('../utils/sliceGribByRegion');
 const uploadStreamToS3 = require('../utils/uploadStreamToS3');
 const logger = require('../logger');
+const { VALID_TIMEFRAME } = require('../configs/sourceModel.config');
 
 const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
 const slicedBucket = process.env.AWS_S3_SLICED_BUCKET;
+
+async function removeRedundantFiles(files) {
+  const finalFiles = [];
+  for (let i = 0; i < files.length; i++) {
+    const { created_at, model, start_time, end_time } = files[i];
+    const similarFile = finalFiles.find((record) => {
+      if (
+        record.model === model &&
+        String(record.start_time) === String(start_time) &&
+        String(record.end_time) === String(end_time)
+      ) {
+        return true;
+      }
+      return false;
+    });
+    if (similarFile) {
+      // Only mutate if created at is newer
+      if (similarFile.created_at < created_at) {
+        // mutate the value into
+        similarFile = { ...files[i] };
+      }
+    } else {
+      // No file exist
+      finalFiles.push({ ...files[i] });
+    }
+  }
+  return finalFiles;
+}
 
 async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const query = `SELECT "model_name" FROM "SourceModels" WHERE ST_Contains ( "spatial_boundary", ST_GeomFromText ( :polygon, 4326 ) )`;
@@ -41,7 +70,7 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const startDate = new Date(startTime);
   const endDate = new Date(endTime);
   const files = await db.weatherData.findAll({
-    limit: 3, //TODO: Remove limit after testing
+    // limit: 3, //TODO: Remove limit after testing
     where: {
       model: { [Op.in]: modelsToFetch },
       [Op.or]: [
@@ -63,14 +92,15 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
         },
       ],
     },
+    order: [['created_at', 'DESC']],
     raw: true,
   });
-  return files;
+  return removeRedundantFiles(files);
 }
 
 async function getArchivedData(roi, startTime, endTime, raceID) {
   const files = await getWeatherFilesByRegion(roi, startTime, endTime);
-
+  console.log(files);
   const bbox = turf.bbox(roi);
   const bboxPolygon = turf.bboxPolygon(bbox);
 
@@ -118,38 +148,64 @@ async function getArchivedData(roi, startTime, endTime, raceID) {
 
       // GeoJSON stream to s3
       const jsonFiles = await Promise.all(
-        geoJsons.map(async (json) => {
-          try {
-            const uuid = uuidv4();
-
-            const gsVariables = new Set();
-            const gsLevels = [json.properties.level];
-            const gsTimes = [`${json.properties.time}+00`];
-            if (json.features[0]) {
-              for (const variable in json.features[0].properties) {
-                gsVariables.add(variable);
-              }
-            }
-
-            const { writeStream, uploadPromise } = uploadStreamToS3(
-              `geojson/${model}/${uuid}.json`,
-              slicedBucket,
+        geoJsons
+          .filter((json) => {
+            const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
+            const jsonStartTime = `${json.properties.time}+00`;
+            const jsonStartTimeUnix = Date.parse(jsonStartTime);
+            const jsonEndTimeUnix = new Date(
+              jsonStartTimeUnix + endTimeModifier,
             );
-            const readable = Readable.from([JSON.stringify(json)]);
-            readable.pipe(writeStream);
-            const jsonDetail = await uploadPromise;
-            return {
-              uuid,
-              key: jsonDetail.Key,
-              levels: gsLevels,
-              runtimes: gsTimes,
-              variables: Array.from(gsVariables),
-            };
-          } catch (error) {
-            logger.error(`Error uploading geojson: ${error.message}`);
-            return null;
-          }
-        }),
+
+            if (
+              (jsonStartTimeUnix <= endTime &&
+                jsonStartTimeUnix >= startTime) ||
+              (jsonEndTimeUnix <= endTime && jsonEndTimeUnix >= startTime)
+            ) {
+              return true;
+            }
+            return false;
+          })
+          .map(async (json) => {
+            try {
+              const uuid = uuidv4();
+
+              const gsVariables = new Set();
+              const gsLevels = [json.properties.level];
+              const gsTimes = [`${json.properties.time}+00`];
+              if (json.features[0]) {
+                for (const variable in json.features[0].properties) {
+                  gsVariables.add(variable);
+                }
+              }
+
+              const { writeStream, uploadPromise } = uploadStreamToS3(
+                `geojson/${model}/${uuid}.json`,
+                slicedBucket,
+              );
+              const readable = Readable.from([JSON.stringify(json)]);
+              readable.pipe(writeStream);
+              const jsonDetail = await uploadPromise;
+
+              const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
+              const startTime = gsTimes[0];
+              const startTimeInUnix = Date.parse(startTime);
+              const endTime = new Date(startTimeInUnix + endTimeModifier);
+
+              return {
+                uuid,
+                start_time: `${json.properties.time}+00`,
+                end_time: endTime.toISOString(),
+                key: jsonDetail.Key,
+                levels: gsLevels,
+                runtimes: gsTimes,
+                variables: Array.from(gsVariables),
+              };
+            } catch (error) {
+              logger.error(`Error uploading geojson: ${error.message}`);
+              return null;
+            }
+          }),
       );
       // End of geojson stream to s3
       // Saving to DB
@@ -176,8 +232,8 @@ async function getArchivedData(roi, startTime, endTime, raceID) {
           return {
             id: row.uuid,
             model,
-            start_time,
-            end_time,
+            start_time: row.start_time, // Since json files only 1 runtime for each file, need to replace start_time of the grib
+            end_time: row.end_time,
             s3_key: row.key,
             file_type: 'JSON',
             bounding_box: bboxPolygon.geometry,
