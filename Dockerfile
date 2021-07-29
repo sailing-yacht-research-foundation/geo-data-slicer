@@ -70,16 +70,6 @@ RUN tar -xzf wgrib2.tgz \
 RUN cp grib2/wgrib2/wgrib2 /usr/local/bin \
     && rm -rf grib2 \
     && rm wgrib2.tgz
-#Install ImageMagick
-RUN cd /opt \
-    && wget http://www.imagemagick.org/download/ImageMagick.tar.gz \
-    && tar xvzf ImageMagick.tar.gz \
-    && cd ImageMagick-7.1.0-* \
-    && touch configure \
-    && ./configure \
-    && make \
-    && make install \
-    && ldconfig /usr/local/lib
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata
 RUN ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime
 RUN dpkg-reconfigure --frontend noninteractive tzdata
