@@ -253,7 +253,13 @@ async function getArchivedData(roi, startTime, endTime, raceID) {
         logger.error(`Error saving metadata to DB: ${error.message}`);
       }
       return successJsons.map((row) => {
-        return { key: row.key, model, levels, variables, runtimes };
+        return {
+          key: row.key,
+          model,
+          levels: row.levels,
+          variables: row.variables,
+          runtimes: row.runtimes,
+        };
       });
     }),
   );
