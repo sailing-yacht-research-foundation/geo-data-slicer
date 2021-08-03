@@ -26,14 +26,16 @@ RUN apt-get update \
     && apt-get autoremove
 RUN rm -f /usr/bin/python && ln -s /usr/bin/python3 /usr/bin/python
 
-RUN pip3 install pytesseract \
+RUN pip3 install Pillow \
+    && pip3 install pytesseract \
     && pip3 install python3-wget
 RUN apt-get update && apt-get install -y cron
 RUN apt-get install m4 -y
 RUN apt-get install git -y
 
-RUN apt install nodejs -y
-RUN apt install npm -y
+RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
+RUN apt-get install -y nodejs
+RUN apt-get install -y build-essential
 
 # HDF5 Installation
 RUN wget https://www.hdfgroup.org/package/bzip2/?wpdmdl=4300 \
@@ -68,16 +70,6 @@ RUN tar -xzf wgrib2.tgz \
 RUN cp grib2/wgrib2/wgrib2 /usr/local/bin \
     && rm -rf grib2 \
     && rm wgrib2.tgz
-#Install ImageMagick
-RUN cd /opt \
-    && wget http://www.imagemagick.org/download/ImageMagick.tar.gz \
-    && tar xvzf ImageMagick.tar.gz \
-    && cd ImageMagick-7.0.11-13 \
-    && touch configure \
-    && ./configure \
-    && make \
-    && make install \
-    && ldconfig /usr/local/lib
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata
 RUN ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime
 RUN dpkg-reconfigure --frontend noninteractive tzdata
@@ -174,13 +166,21 @@ RUN pip3 install cartopy cftime oktopus tqdm cf-units dask stratify pyugrid
 RUN apt-get install -y aptitude
 RUN aptitude install nco -y
 
-RUN add-apt-repository ppa:linuxuprising/java
-RUN apt install -f oracle-java16-set-default -y
+RUN apt-get update && \
+    add-apt-repository -y ppa:linuxuprising/java && \
+    apt-get update && \
+    echo oracle-java16-installer shared/accepted-oracle-license-v1-2 select true | /usr/bin/debconf-set-selections && \
+    apt-get install -y oracle-java16-installer && \
+    apt install oracle-java16-set-default
 
 RUN npm install -g weacast-grib2json
 RUN export JAVA_HOME=/usr
 RUN export PATH=$PATH:/usr/lib/node_modules/weacast-grib2json/bin
 
 # Thank goodness we're done.
+
+# PM2 Process Manager
+RUN npm install pm2 -g
+
 WORKDIR /data
 CMD /bin/zsh
