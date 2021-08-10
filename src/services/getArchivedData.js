@@ -98,11 +98,9 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   return removeRedundantFiles(files);
 }
 
-async function getArchivedData(roi, startTime, endTime, raceID) {
-  const files = await getWeatherFilesByRegion(roi, startTime, endTime);
-  console.log(files);
-  const bbox = turf.bbox(roi);
+async function getArchivedData(bbox, startTime, endTime, raceID) {
   const bboxPolygon = turf.bboxPolygon(bbox);
+  const files = await getWeatherFilesByRegion(bboxPolygon, startTime, endTime);
 
   const data = await Promise.all(
     files.map(async (row) => {

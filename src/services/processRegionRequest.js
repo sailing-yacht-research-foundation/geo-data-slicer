@@ -11,6 +11,7 @@ const getArchivedData = require('./getArchivedData');
 const createShipReport = require('./createShipReport');
 const createWindfinderWind = require('./createWindfinderWind');
 const createNoaaBuoyWind = require('./createNoaaBuoyWind');
+const logger = require('../logger');
 
 async function processRegionRequest(
   roi,
@@ -21,8 +22,15 @@ async function processRegionRequest(
   updateFrequencyMinutes,
   raceID,
 ) {
+  const bbox = turf.bbox(roi);
+  const leftLon = Math.floor(bbox[0]);
+  const bottomLat = Math.floor(bbox[1]);
+  const rightLon = Math.ceil(bbox[2]);
+  const topLat = Math.ceil(bbox[3]);
+  const containerBbox = [leftLon, bottomLat, rightLon, topLat];
+
   const archivedPromise = getArchivedData(
-    roi,
+    containerBbox,
     startTimeUnixMS,
     endTimeUnixMS,
     raceID,
@@ -30,10 +38,13 @@ async function processRegionRequest(
 
   const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
 
-  const bbox = turf.bbox(roi);
-
   const spots = windfinderIndex
-    .range(bbox[0], bbox[1], bbox[2], bbox[3])
+    .range(
+      containerBbox[0],
+      containerBbox[1],
+      containerBbox[2],
+      containerBbox[3],
+    )
     .map((id) => windfinderPoints[id]);
   const windfinderPromise = createWindfinderWind(
     spots,
@@ -42,7 +53,12 @@ async function processRegionRequest(
   );
 
   const buoys = noaaBuoyIndex
-    .range(bbox[0], bbox[1], bbox[2], bbox[3])
+    .range(
+      containerBbox[0],
+      containerBbox[1],
+      containerBbox[2],
+      containerBbox[3],
+    )
     .map((id) => noaaBuoyPoints[id]);
   const noaaBuoyPromise = createNoaaBuoyWind(
     buoys,
@@ -58,19 +74,26 @@ async function processRegionRequest(
       noaaBuoyPromise,
     ]);
 
-  const shipReports = turf.pointsWithinPolygon(shipReportsFull, roi);
-  await axios({
-    url: webhook,
-    method: 'POST',
-    data: {
-      raceID,
-      token: webhookToken,
-      archivedData,
-      shipReports,
-      windfinderWinds,
-      noaaBuoyWinds,
-    },
-  });
+  const shipReports = turf.pointsWithinPolygon(
+    shipReportsFull,
+    turf.bboxPolygon(containerBbox),
+  );
+  try {
+    await axios({
+      url: webhook,
+      method: 'POST',
+      data: {
+        raceID,
+        token: webhookToken,
+        archivedData,
+        shipReports,
+        windfinderWinds,
+        noaaBuoyWinds,
+      },
+    });
+  } catch (error) {
+    logger.error(`Failed to send data to webhook. Error: ${error.message}`);
+  }
 }
 
 module.exports = processRegionRequest;
