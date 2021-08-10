@@ -1,7 +1,7 @@
 const isValidPolygon = require('../utils/isValidPolygon');
 
 module.exports = function (req, res, next) {
-  const requiredFields = ['roi', 'startTimeUnixMS', 'endTimeUnixMS', 'webhook'];
+  const requiredFields = ['roi', 'startTimeUnixMS', 'endTimeUnixMS'];
   const missingFields = requiredFields.filter((field) => {
     if (!req.body[field]) {
       return true;
