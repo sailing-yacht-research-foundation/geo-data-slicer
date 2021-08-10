@@ -1,12 +1,7 @@
 const isValidPoint = require('../utils/isValidPoint');
 
 module.exports = function (req, res, next) {
-  const requiredFields = [
-    'point',
-    'startTimeUnixMS',
-    'endTimeUnixMS',
-    'webhook',
-  ];
+  const requiredFields = ['point', 'startTimeUnixMS', 'endTimeUnixMS'];
   let message = '';
   const missingFields = requiredFields.filter((field) => {
     if (!req.body[field]) {

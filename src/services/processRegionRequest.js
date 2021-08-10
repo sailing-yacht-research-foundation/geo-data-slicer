@@ -78,21 +78,24 @@ async function processRegionRequest(
     shipReportsFull,
     turf.bboxPolygon(containerBbox),
   );
-  try {
-    await axios({
-      url: webhook,
-      method: 'POST',
-      data: {
-        raceID,
-        token: webhookToken,
-        archivedData,
-        shipReports,
-        windfinderWinds,
-        noaaBuoyWinds,
-      },
-    });
-  } catch (error) {
-    logger.error(`Failed to send data to webhook. Error: ${error.message}`);
+
+  if (webhook) {
+    try {
+      await axios({
+        url: webhook,
+        method: 'POST',
+        data: {
+          raceID,
+          token: webhookToken,
+          archivedData,
+          shipReports,
+          windfinderWinds,
+          noaaBuoyWinds,
+        },
+      });
+    } catch (error) {
+      logger.error(`Failed to send data to webhook. Error: ${error.message}`);
+    }
   }
 }
 
