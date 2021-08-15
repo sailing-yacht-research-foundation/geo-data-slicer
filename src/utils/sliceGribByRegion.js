@@ -54,7 +54,6 @@ function sliceGribByRegion(bbox, filename, options) {
     `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
   );
   fs.unlinkSync(filename);
-  fs.unlinkSync(`${folder}/small_${fileID}.grib2`);
   const csvData = fs.readFileSync(`${folder}/${fileID}.csv`, 'utf-8');
   fs.unlinkSync(`${folder}/${fileID}.csv`);
   const parsedData = parseCsvData(csvData);
@@ -96,7 +95,7 @@ function sliceGribByRegion(bbox, filename, options) {
     switch (variable) {
       case 'UGRD':
         execSync(
-          `wgrib2 ${filename} -match ":(UGRD|VGRD):(${varLevels}):" ${folder}/${fileID}_uvgrd.grib2`,
+          `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UGRD|VGRD):(${varLevels}):" -grib_out ${folder}/${fileID}_uvgrd.grib2`,
         );
         slicedGribs.push({
           filePath: `${folder}/${fileID}_uvgrd.grib2`,
@@ -106,7 +105,7 @@ function sliceGribByRegion(bbox, filename, options) {
         break;
       case 'UOGRD':
         execSync(
-          `wgrib2 ${filename} -match ":(UOGRD|VOGRD):(${varLevels}):" ${folder}/${fileID}_uvogrd.grib2`,
+          `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UOGRD|VOGRD):(${varLevels}):" -grib_out ${folder}/${fileID}_uvogrd.grib2`,
         );
         slicedGribs.push({
           filePath: `${folder}/${fileID}_uvogrd.grib2`,
@@ -120,7 +119,7 @@ function sliceGribByRegion(bbox, filename, options) {
         break;
       default:
         execSync(
-          `wgrib2 ${filename} -match ":(${variable}):(${varLevels}):" ${folder}/${fileID}_${variable}.grib2`,
+          `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(${variable}):(${varLevels}):" -grib_out ${folder}/${fileID}_${variable}.grib2`,
         );
         slicedGribs.push({
           filePath: `${folder}/${fileID}_${variable}.grib2`,
@@ -130,6 +129,8 @@ function sliceGribByRegion(bbox, filename, options) {
         break;
     }
   });
+
+  fs.unlinkSync(`${folder}/small_${fileID}.grib2`);
 
   return {
     slicedGribs,

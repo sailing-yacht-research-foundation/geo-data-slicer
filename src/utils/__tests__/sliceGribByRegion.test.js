@@ -39,7 +39,7 @@ describe('Slice grib files into smaller grib and extract the values', () => {
       `wgrib2 ${operatingFolder}/small_uuid.grib2 -csv ${operatingFolder}/uuid.csv`,
     ]);
     expect(childProcess.execSync.mock.calls[2]).toEqual([
-      `wgrib2 large.grib2 -match ":(UGRD|VGRD):(10 m above ground):" ${operatingFolder}/uuid_uvgrd.grib2`,
+      `wgrib2 large.grib2 -match ":(UGRD|VGRD):(10 m above ground):" -grib_out ${operatingFolder}/uuid_uvgrd.grib2`,
     ]);
     expect(fs.unlinkSync).toHaveBeenCalledTimes(3);
     expect(result).toEqual({
