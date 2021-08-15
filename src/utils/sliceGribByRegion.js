@@ -54,6 +54,7 @@ function sliceGribByRegion(bbox, filename, options) {
     `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
   );
   fs.unlinkSync(filename);
+  fs.unlinkSync(`${folder}/small_${fileID}.grib2`);
   const csvData = fs.readFileSync(`${folder}/${fileID}.csv`, 'utf-8');
   fs.unlinkSync(`${folder}/${fileID}.csv`);
   const parsedData = parseCsvData(csvData);
@@ -74,8 +75,49 @@ function sliceGribByRegion(bbox, filename, options) {
     }
     return false;
   });
+
+  let slicedGribs = [];
+  if (INCLUDED_LEVELS[model]) {
+    variables.forEach((variable) => {
+      let levels = INCLUDED_LEVELS[model].join('|');
+      switch (variable) {
+        case 'UGRD':
+          execSync(
+            `wgrib2 ${filename} -match ":(UGRD|VGRD):(${levels}):" ${folder}/${fileID}_uvgrd.grib2`,
+          );
+          slicedGribs.push({
+            filePath: `${folder}/${fileID}_uvgrd.grib2`,
+            variables: ['UGRD', 'VGRD'],
+          });
+          break;
+        case 'UOGRD':
+          execSync(
+            `wgrib2 ${filename} -match ":(UOGRD|VOGRD):(${levels}):" ${folder}/${fileID}_uvogrd.grib2`,
+          );
+          slicedGribs.push({
+            filePath: `${folder}/${fileID}_uvogrd.grib2`,
+            variables: ['UOGRD', 'VOGRD'],
+          });
+          break;
+        case 'VGRD':
+        case 'VOGRD':
+          // Ignore these 2, combined with their u-couterpart
+          break;
+        default:
+          execSync(
+            `wgrib2 ${filename} -match ":(${variable}):(${levels}):" ${folder}/${fileID}_${variable}.grib2`,
+          );
+          slicedGribs.push({
+            filePath: `${folder}/${fileID}_${variable}.grib2`,
+            variables: [variable],
+          });
+          break;
+      }
+    });
+  }
+
   return {
-    slicedGrib: `${folder}/small_${fileID}.grib2`,
+    slicedGribs,
     geoJsons: finalResult,
     levels: Array.from(levels),
     variables: Array.from(variables),

@@ -31,16 +31,24 @@ describe('Slice grib files into smaller grib and extract the values', () => {
       model: 'GFS',
     });
 
-    expect(childProcess.execSync).toHaveBeenCalledTimes(2);
+    expect(childProcess.execSync).toHaveBeenCalledTimes(3);
     expect(childProcess.execSync.mock.calls[0]).toEqual([
       `wgrib2 large.grib2 -small_grib 5:6 53:54 ${operatingFolder}/small_uuid.grib2`,
     ]);
     expect(childProcess.execSync.mock.calls[1]).toEqual([
       `wgrib2 ${operatingFolder}/small_uuid.grib2 -csv ${operatingFolder}/uuid.csv`,
     ]);
-    expect(fs.unlinkSync).toHaveBeenCalledTimes(2);
+    expect(childProcess.execSync.mock.calls[2]).toEqual([
+      `wgrib2 large.grib2 -match ":(UGRD|VGRD):(10 m above ground):" ${operatingFolder}/uuid_uvgrd.grib2`,
+    ]);
+    expect(fs.unlinkSync).toHaveBeenCalledTimes(3);
     expect(result).toEqual({
-      slicedGrib: `${operatingFolder}/small_uuid.grib2`,
+      slicedGribs: [
+        {
+          filePath: `${operatingFolder}/uuid_uvgrd.grib2`,
+          variables: 'UGRD-VGRD',
+        },
+      ],
       variables: ['UGRD', 'VGRD'],
       levels: ['10 m above ground'],
       runtimes: ['2021-06-16 01:00:00+00'],
@@ -103,9 +111,9 @@ describe('Slice grib files into smaller grib and extract the values', () => {
     expect(childProcess.execSync.mock.calls[1]).toEqual([
       `wgrib2 ${operatingFolder}/small_uuid.grib2 -csv ${operatingFolder}/uuid.csv`,
     ]);
-    expect(fs.unlinkSync).toHaveBeenCalledTimes(2);
+    expect(fs.unlinkSync).toHaveBeenCalledTimes(3);
     expect(result).toEqual({
-      slicedGrib: `${operatingFolder}/small_uuid.grib2`,
+      slicedGribs: [],
       variables: ['UGRD', 'VGRD'],
       levels: ['10 m above ground'],
       runtimes: ['2021-06-16 01:00:00+00'],
