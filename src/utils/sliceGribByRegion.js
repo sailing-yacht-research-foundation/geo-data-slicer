@@ -63,12 +63,24 @@ function sliceGribByRegion(bbox, filename, options) {
   const levels = new Set();
   const runtimes = new Set();
   const variables = new Set();
+  const variablesToLevel = new Map();
 
   const finalResult = geoJsons.filter((geoJson) => {
     levels.add(geoJson.properties.level);
     runtimes.add(`${geoJson.properties.time}+00`);
     for (const variable in geoJson.features[0].properties) {
       variables.add(variable);
+      const existingVTL = variablesToLevel.get(variable) || [];
+      if (
+        (INCLUDED_LEVELS[model] &&
+          INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1) ||
+        !INCLUDED_LEVELS[model]
+      ) {
+        variablesToLevel.set(variable, [
+          ...existingVTL,
+          geoJson.properties.level,
+        ]);
+      }
     }
     if (INCLUDED_LEVELS[model]) {
       return INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1;
@@ -77,50 +89,51 @@ function sliceGribByRegion(bbox, filename, options) {
   });
 
   let slicedGribs = [];
-  if (INCLUDED_LEVELS[model]) {
-    variables.forEach((variable) => {
-      let levels = INCLUDED_LEVELS[model].join('|');
-      switch (variable) {
-        case 'UGRD':
-          execSync(
-            `wgrib2 ${filename} -match ":(UGRD|VGRD):(${levels}):" ${folder}/${fileID}_uvgrd.grib2`,
-          );
-          slicedGribs.push({
-            filePath: `${folder}/${fileID}_uvgrd.grib2`,
-            variables: ['UGRD', 'VGRD'],
-          });
-          break;
-        case 'UOGRD':
-          execSync(
-            `wgrib2 ${filename} -match ":(UOGRD|VOGRD):(${levels}):" ${folder}/${fileID}_uvogrd.grib2`,
-          );
-          slicedGribs.push({
-            filePath: `${folder}/${fileID}_uvogrd.grib2`,
-            variables: ['UOGRD', 'VOGRD'],
-          });
-          break;
-        case 'VGRD':
-        case 'VOGRD':
-          // Ignore these 2, combined with their u-couterpart
-          break;
-        default:
-          execSync(
-            `wgrib2 ${filename} -match ":(${variable}):(${levels}):" ${folder}/${fileID}_${variable}.grib2`,
-          );
-          slicedGribs.push({
-            filePath: `${folder}/${fileID}_${variable}.grib2`,
-            variables: [variable],
-          });
-          break;
-      }
-    });
-  }
+  variables.forEach((variable) => {
+    let varLevels = INCLUDED_LEVELS[model]
+      ? INCLUDED_LEVELS[model].join('|')
+      : Array.from(levels).join('|');
+    switch (variable) {
+      case 'UGRD':
+        execSync(
+          `wgrib2 ${filename} -match ":(UGRD|VGRD):(${varLevels}):" ${folder}/${fileID}_uvgrd.grib2`,
+        );
+        slicedGribs.push({
+          filePath: `${folder}/${fileID}_uvgrd.grib2`,
+          variables: ['UGRD', 'VGRD'],
+          levels: variablesToLevel.get(variable),
+        });
+        break;
+      case 'UOGRD':
+        execSync(
+          `wgrib2 ${filename} -match ":(UOGRD|VOGRD):(${varLevels}):" ${folder}/${fileID}_uvogrd.grib2`,
+        );
+        slicedGribs.push({
+          filePath: `${folder}/${fileID}_uvogrd.grib2`,
+          variables: ['UOGRD', 'VOGRD'],
+          levels: variablesToLevel.get(variable),
+        });
+        break;
+      case 'VGRD':
+      case 'VOGRD':
+        // Ignore these 2, combined with their u-couterpart
+        break;
+      default:
+        execSync(
+          `wgrib2 ${filename} -match ":(${variable}):(${varLevels}):" ${folder}/${fileID}_${variable}.grib2`,
+        );
+        slicedGribs.push({
+          filePath: `${folder}/${fileID}_${variable}.grib2`,
+          variables: [variable],
+          levels: variablesToLevel.get(variable),
+        });
+        break;
+    }
+  });
 
   return {
     slicedGribs,
     geoJsons: finalResult,
-    levels: Array.from(levels),
-    variables: Array.from(variables),
     runtimes: Array.from(runtimes),
   };
 }

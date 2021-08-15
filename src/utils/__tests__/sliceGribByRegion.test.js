@@ -46,11 +46,10 @@ describe('Slice grib files into smaller grib and extract the values', () => {
       slicedGribs: [
         {
           filePath: `${operatingFolder}/uuid_uvgrd.grib2`,
-          variables: 'UGRD-VGRD',
+          variables: ['UGRD', 'VGRD'],
+          levels: ['10 m above ground'],
         },
       ],
-      variables: ['UGRD', 'VGRD'],
-      levels: ['10 m above ground'],
       runtimes: ['2021-06-16 01:00:00+00'],
       geoJsons: [
         {
@@ -104,7 +103,7 @@ describe('Slice grib files into smaller grib and extract the values', () => {
       model: 'RANDOM',
     });
 
-    expect(childProcess.execSync).toHaveBeenCalledTimes(2);
+    expect(childProcess.execSync).toHaveBeenCalledTimes(3);
     expect(childProcess.execSync.mock.calls[0]).toEqual([
       `wgrib2 large.grib2 -small_grib 5:6 53:54 ${operatingFolder}/small_uuid.grib2`,
     ]);
@@ -113,9 +112,13 @@ describe('Slice grib files into smaller grib and extract the values', () => {
     ]);
     expect(fs.unlinkSync).toHaveBeenCalledTimes(3);
     expect(result).toEqual({
-      slicedGribs: [],
-      variables: ['UGRD', 'VGRD'],
-      levels: ['10 m above ground'],
+      slicedGribs: [
+        {
+          filePath: `${operatingFolder}/uuid_uvgrd.grib2`,
+          variables: ['UGRD', 'VGRD'],
+          levels: ['10 m above ground'],
+        },
+      ],
       runtimes: ['2021-06-16 01:00:00+00'],
       geoJsons: [],
     });
