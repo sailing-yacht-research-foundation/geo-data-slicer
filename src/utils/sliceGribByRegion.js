@@ -71,9 +71,10 @@ function sliceGribByRegion(bbox, filename, options) {
       variables.add(variable);
       const existingVTL = variablesToLevel.get(variable) || [];
       if (
-        (INCLUDED_LEVELS[model] &&
+        existingVTL.indexOf(geoJson.properties.level) === -1 &&
+        ((INCLUDED_LEVELS[model] &&
           INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1) ||
-        !INCLUDED_LEVELS[model]
+          !INCLUDED_LEVELS[model])
       ) {
         variablesToLevel.set(variable, [
           ...existingVTL,
@@ -89,44 +90,45 @@ function sliceGribByRegion(bbox, filename, options) {
 
   let slicedGribs = [];
   variables.forEach((variable) => {
-    let varLevels = INCLUDED_LEVELS[model]
-      ? INCLUDED_LEVELS[model].join('|')
-      : Array.from(levels).join('|');
-    switch (variable) {
-      case 'UGRD':
-        execSync(
-          `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UGRD|VGRD):(${varLevels}):" -grib_out ${folder}/${fileID}_uvgrd.grib2`,
-        );
-        slicedGribs.push({
-          filePath: `${folder}/${fileID}_uvgrd.grib2`,
-          variables: ['UGRD', 'VGRD'],
-          levels: variablesToLevel.get(variable),
-        });
-        break;
-      case 'UOGRD':
-        execSync(
-          `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UOGRD|VOGRD):(${varLevels}):" -grib_out ${folder}/${fileID}_uvogrd.grib2`,
-        );
-        slicedGribs.push({
-          filePath: `${folder}/${fileID}_uvogrd.grib2`,
-          variables: ['UOGRD', 'VOGRD'],
-          levels: variablesToLevel.get(variable),
-        });
-        break;
-      case 'VGRD':
-      case 'VOGRD':
-        // Ignore these 2, combined with their u-couterpart
-        break;
-      default:
-        execSync(
-          `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(${variable}):(${varLevels}):" -grib_out ${folder}/${fileID}_${variable}.grib2`,
-        );
-        slicedGribs.push({
-          filePath: `${folder}/${fileID}_${variable}.grib2`,
-          variables: [variable],
-          levels: variablesToLevel.get(variable),
-        });
-        break;
+    const levelsAvailable = variablesToLevel.get(variable);
+    if (levelsAvailable && levelsAvailable.length > 0) {
+      let varLevels = Array.from(levelsAvailable).join('|');
+      switch (variable) {
+        case 'UGRD':
+          execSync(
+            `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UGRD|VGRD):(${varLevels}):" -grib_out ${folder}/${fileID}_uvgrd.grib2`,
+          );
+          slicedGribs.push({
+            filePath: `${folder}/${fileID}_uvgrd.grib2`,
+            variables: ['UGRD', 'VGRD'],
+            levels: variablesToLevel.get(variable),
+          });
+          break;
+        case 'UOGRD':
+          execSync(
+            `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UOGRD|VOGRD):(${varLevels}):" -grib_out ${folder}/${fileID}_uvogrd.grib2`,
+          );
+          slicedGribs.push({
+            filePath: `${folder}/${fileID}_uvogrd.grib2`,
+            variables: ['UOGRD', 'VOGRD'],
+            levels: variablesToLevel.get(variable),
+          });
+          break;
+        case 'VGRD':
+        case 'VOGRD':
+          // Ignore these 2, combined with their u-couterpart
+          break;
+        default:
+          execSync(
+            `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(${variable}):(${varLevels}):" -grib_out ${folder}/${fileID}_${variable}.grib2`,
+          );
+          slicedGribs.push({
+            filePath: `${folder}/${fileID}_${variable}.grib2`,
+            variables: [variable],
+            levels: variablesToLevel.get(variable),
+          });
+          break;
+      }
     }
   });
 
