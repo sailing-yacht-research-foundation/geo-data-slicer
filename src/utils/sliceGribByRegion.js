@@ -12,7 +12,7 @@ const INCLUDED_LEVELS = {
     // 'atmos col',
     'surface',
   ],
-  GFS: ['10 m above ground'],
+  GFS: ['10 m above ground', '40 m above ground'],
   RTOFS_GLOBAL: ['0 m below sea level'],
   // Regionals
   AROME_FRANCE: [
