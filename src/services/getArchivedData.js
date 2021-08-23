@@ -70,7 +70,7 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const startDate = new Date(startTime);
   const endDate = new Date(endTime);
   const files = await db.weatherData.findAll({
-    limit: 3, //TODO: Remove limit after testing
+    // limit: 3, //TODO: Remove limit after testing
     where: {
       model: { [Op.in]: modelsToFetch },
       [Op.or]: [
@@ -102,9 +102,17 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
   const bboxPolygon = turf.bboxPolygon(bbox);
   const files = await getWeatherFilesByRegion(bboxPolygon, startTime, endTime);
 
+  const activeDownloadList = new Map();
   const data = await Promise.all(
     files.map(async (row) => {
+      while (activeDownloadList.size >= 10) {
+        logger.info('More than 10 files are in active download!');
+        await new Promise((resolve) => {
+          setTimeout(resolve, 10000);
+        });
+      }
       const { id, model, start_time, end_time, grib_file_url } = row;
+      activeDownloadList.set(id, 'processing');
       const downloadPath = path.resolve(
         __dirname,
         `../../operating_folder/${id}.grib2`,
@@ -115,6 +123,7 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
         logger.error(`Error downloading grib: ${error.message}`);
         return [];
       }
+      activeDownloadList.delete(id);
 
       const currentTime = new Date();
       const currentYear = String(currentTime.getUTCFullYear());
@@ -281,7 +290,6 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
           validate: true,
         });
       } catch (error) {
-        console.log('errdb', error);
         logger.error(`Error saving metadata to DB: ${error.message}`);
       }
       return successJsons.map((row) => {
