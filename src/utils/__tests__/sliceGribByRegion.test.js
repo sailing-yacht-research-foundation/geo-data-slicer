@@ -53,13 +53,13 @@ describe('Slice grib files into smaller grib and extract the values', () => {
           `wgrib2 ${operatingFolder}/small_uuid.grib2 -csv ${operatingFolder}/uuid.csv`,
         ],
         [
-          `wgrib2 ${operatingFolder}/small_uuid.grib2 -match ":(GUST):(10 m above ground):" -grib_out ${operatingFolder}/uuid_GUST.grib2`,
+          `wgrib2 ${operatingFolder}/small_uuid.grib2 -match ":(GUST):(10 m above ground):" -grib_out ${operatingFolder}/uuid_GUST_10_m_above_ground.grib2`,
         ],
         [
-          `wgrib2 ${operatingFolder}/small_uuid.grib2 -match ":(UGRD|VGRD):(10 m above ground):" -grib_out ${operatingFolder}/uuid_uvgrd.grib2`,
+          `wgrib2 ${operatingFolder}/small_uuid.grib2 -match ":(UGRD|VGRD):(10 m above ground):" -grib_out ${operatingFolder}/uuid_uvgrd_10_m_above_ground.grib2`,
         ],
         [
-          `wgrib2 ${operatingFolder}/small_uuid.grib2 -match ":(UOGRD|VOGRD):(10 m above ground):" -grib_out ${operatingFolder}/uuid_uvogrd.grib2`,
+          `wgrib2 ${operatingFolder}/small_uuid.grib2 -match ":(UOGRD|VOGRD):(10 m above ground):" -grib_out ${operatingFolder}/uuid_uvogrd_10_m_above_ground.grib2`,
         ],
       ]),
     );
@@ -67,13 +67,18 @@ describe('Slice grib files into smaller grib and extract the values', () => {
     expect(result).toEqual({
       slicedGribs: [
         {
-          filePath: `${operatingFolder}/uuid_uvgrd.grib2`,
+          filePath: `${operatingFolder}/uuid_uvgrd_10_m_above_ground.grib2`,
           variables: ['UGRD', 'VGRD'],
           levels: ['10 m above ground'],
         },
         {
-          filePath: `${operatingFolder}/uuid_uvogrd.grib2`,
+          filePath: `${operatingFolder}/uuid_uvogrd_10_m_above_ground.grib2`,
           variables: ['UOGRD', 'VOGRD'],
+          levels: ['10 m above ground'],
+        },
+        {
+          filePath: `${operatingFolder}/uuid_GUST_10_m_above_ground.grib2`,
+          variables: ['GUST'],
           levels: ['10 m above ground'],
         },
       ],
@@ -141,7 +146,7 @@ describe('Slice grib files into smaller grib and extract the values', () => {
     expect(result).toEqual({
       slicedGribs: [
         {
-          filePath: `${operatingFolder}/uuid_uvgrd.grib2`,
+          filePath: `${operatingFolder}/uuid_uvgrd_10_m_above_ground.grib2`,
           variables: ['UGRD', 'VGRD'],
           levels: ['10 m above ground'],
         },
