@@ -232,8 +232,8 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
 
               return {
                 uuid,
-                start_time: `${json.properties.time}+00`,
-                end_time: endTime.toISOString(),
+                startTime: `${json.properties.time}+00`,
+                endTime: endTime.toISOString(),
                 key: jsonDetail.Key,
                 levels: gsLevels,
                 runtimes: gsTimes,
@@ -257,11 +257,11 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
             return {
               id: row.id,
               model,
-              start_time,
-              end_time,
-              s3_key: row.s3Key,
-              file_type: 'GRIB',
-              bounding_box: bboxPolygon.geometry,
+              startTime: start_time,
+              endTime: end_time,
+              s3Key: row.s3Key,
+              fileType: 'GRIB',
+              boundingBox: bboxPolygon.geometry,
               levels: row.levels,
               variables: row.variables,
               runtimes,
@@ -272,8 +272,8 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
           return {
             id: row.uuid,
             model,
-            startTime: row.start_time, // Since json files only 1 runtime for each file, need to replace start_time of the grib
-            endTime: row.end_time,
+            startTime: row.startTime,
+            endTime: row.endTime,
             s3Key: row.key,
             fileType: 'JSON',
             boundingBox: bboxPolygon.geometry,
