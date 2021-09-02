@@ -265,22 +265,22 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
               levels: row.levels,
               variables: row.variables,
               runtimes,
-              race_id: raceID,
+              competitionUnitId: raceID,
             };
           }),
         ...successJsons.map((row) => {
           return {
             id: row.uuid,
             model,
-            start_time: row.start_time, // Since json files only 1 runtime for each file, need to replace start_time of the grib
-            end_time: row.end_time,
-            s3_key: row.key,
-            file_type: 'JSON',
-            bounding_box: bboxPolygon.geometry,
+            startTime: row.start_time, // Since json files only 1 runtime for each file, need to replace start_time of the grib
+            endTime: row.end_time,
+            s3Key: row.key,
+            fileType: 'JSON',
+            boundingBox: bboxPolygon.geometry,
             levels: row.levels,
             variables: row.variables,
             runtimes: row.runtimes,
-            race_id: raceID,
+            competitionUnitId: raceID,
           };
         }),
       ];

@@ -11,23 +11,23 @@ module.exports = (sequelize, Sequelize) => {
         type: Sequelize.TEXT,
         allowNull: false,
       },
-      start_time: {
+      startTime: {
         type: Sequelize.DATE,
         allowNull: false,
       },
-      end_time: {
+      endTime: {
         type: Sequelize.DATE,
         allowNull: false,
       },
-      s3_key: {
+      s3Key: {
         type: Sequelize.TEXT,
         allowNull: false,
       },
-      file_type: {
+      fileType: {
         type: Sequelize.ENUM('GRIB', 'JSON'),
         allowNull: false,
       },
-      bounding_box: {
+      boundingBox: {
         type: Sequelize.GEOMETRY('POLYGON', 4326),
         allowNull: false,
       },
@@ -43,7 +43,7 @@ module.exports = (sequelize, Sequelize) => {
         type: Sequelize.ARRAY(Sequelize.DATE),
         allowNull: false,
       },
-      race_id: {
+      competitionUnitId: {
         type: Sequelize.UUID,
         allowNull: true,
       },
