@@ -15,13 +15,19 @@ describe('Slice grib files into smaller grib and extract the values', () => {
   afterEach(async () => {
     jest.resetAllMocks();
   });
-  it('should successfully extract data from gribs', async () => {
+  it('should successfully extract data and keep vector data together', async () => {
     const operatingFolder = path.resolve(__dirname, `../../operating_folder/`);
 
     const csvData = `2021-06-16 00:00:00,2021-06-16 01:00:00,UGRD,10 m above ground,5,53,-4.51266
 2021-06-16 00:00:00,2021-06-16 01:00:00,UGRD,10 m above ground,5.25,53,-4.45266
 2021-06-16 00:00:00,2021-06-16 01:00:00,VGRD,10 m above ground,5,53,2.07934
 2021-06-16 00:00:00,2021-06-16 01:00:00,VGRD,10 m above ground,5.25,53,1.76934
+2021-06-16 00:00:00,2021-06-16 01:00:00,UOGRD,10 m above ground,5,53,-4.51266
+2021-06-16 00:00:00,2021-06-16 01:00:00,UOGRD,10 m above ground,5.25,53,-4.45266
+2021-06-16 00:00:00,2021-06-16 01:00:00,VOGRD,10 m above ground,5,53,2.07934
+2021-06-16 00:00:00,2021-06-16 01:00:00,VOGRD,10 m above ground,5.25,53,1.76934
+2021-06-16 00:00:00,2021-06-16 01:00:00,GUST,10 m above ground,5,53,3
+2021-06-16 00:00:00,2021-06-16 01:00:00,GUST,10 m above ground,5.25,53,3
 `;
     fs.readFileSync.mockReturnValue(csvData);
 
@@ -31,20 +37,53 @@ describe('Slice grib files into smaller grib and extract the values', () => {
       model: 'GFS',
     });
 
-    expect(childProcess.execSync).toHaveBeenCalledTimes(2);
     expect(childProcess.execSync.mock.calls[0]).toEqual([
       `wgrib2 large.grib2 -small_grib 5:6 53:54 ${operatingFolder}/small_uuid.grib2`,
     ]);
     expect(childProcess.execSync.mock.calls[1]).toEqual([
       `wgrib2 ${operatingFolder}/small_uuid.grib2 -csv ${operatingFolder}/uuid.csv`,
     ]);
-    expect(fs.unlinkSync).toHaveBeenCalledTimes(2);
+    expect(childProcess.execSync).toHaveBeenCalledTimes(5);
+    expect(childProcess.execSync.mock.calls).toEqual(
+      expect.arrayContaining([
+        [
+          `wgrib2 large.grib2 -small_grib 5:6 53:54 ${operatingFolder}/small_uuid.grib2`,
+        ],
+        [
+          `wgrib2 ${operatingFolder}/small_uuid.grib2 -csv ${operatingFolder}/uuid.csv`,
+        ],
+        [
+          `wgrib2 ${operatingFolder}/small_uuid.grib2 -match ":(GUST):(10 m above ground):" -grib_out ${operatingFolder}/uuid_GUST_10_m_above_ground.grib2`,
+        ],
+        [
+          `wgrib2 ${operatingFolder}/small_uuid.grib2 -match ":(UGRD|VGRD):(10 m above ground):" -grib_out ${operatingFolder}/uuid_uvgrd_10_m_above_ground.grib2`,
+        ],
+        [
+          `wgrib2 ${operatingFolder}/small_uuid.grib2 -match ":(UOGRD|VOGRD):(10 m above ground):" -grib_out ${operatingFolder}/uuid_uvogrd_10_m_above_ground.grib2`,
+        ],
+      ]),
+    );
+    expect(fs.unlinkSync).toHaveBeenCalledTimes(3);
     expect(result).toEqual({
-      slicedGrib: `${operatingFolder}/small_uuid.grib2`,
-      variables: ['UGRD', 'VGRD'],
-      levels: ['10 m above ground'],
+      slicedGribs: [
+        {
+          filePath: `${operatingFolder}/uuid_uvgrd_10_m_above_ground.grib2`,
+          variables: ['UGRD', 'VGRD'],
+          levels: ['10 m above ground'],
+        },
+        {
+          filePath: `${operatingFolder}/uuid_uvogrd_10_m_above_ground.grib2`,
+          variables: ['UOGRD', 'VOGRD'],
+          levels: ['10 m above ground'],
+        },
+        {
+          filePath: `${operatingFolder}/uuid_GUST_10_m_above_ground.grib2`,
+          variables: ['GUST'],
+          levels: ['10 m above ground'],
+        },
+      ],
       runtimes: ['2021-06-16 01:00:00+00'],
-      geoJsons: [
+      geoJsons: expect.arrayContaining([
         {
           type: 'FeatureCollection',
           features: [
@@ -76,7 +115,7 @@ describe('Slice grib files into smaller grib and extract the values', () => {
             time: '2021-06-16 01:00:00',
           },
         },
-      ],
+      ]),
     });
   });
 
@@ -96,18 +135,22 @@ describe('Slice grib files into smaller grib and extract the values', () => {
       model: 'RANDOM',
     });
 
-    expect(childProcess.execSync).toHaveBeenCalledTimes(2);
+    expect(childProcess.execSync).toHaveBeenCalledTimes(3);
     expect(childProcess.execSync.mock.calls[0]).toEqual([
       `wgrib2 large.grib2 -small_grib 5:6 53:54 ${operatingFolder}/small_uuid.grib2`,
     ]);
     expect(childProcess.execSync.mock.calls[1]).toEqual([
       `wgrib2 ${operatingFolder}/small_uuid.grib2 -csv ${operatingFolder}/uuid.csv`,
     ]);
-    expect(fs.unlinkSync).toHaveBeenCalledTimes(2);
+    expect(fs.unlinkSync).toHaveBeenCalledTimes(3);
     expect(result).toEqual({
-      slicedGrib: `${operatingFolder}/small_uuid.grib2`,
-      variables: ['UGRD', 'VGRD'],
-      levels: ['10 m above ground'],
+      slicedGribs: [
+        {
+          filePath: `${operatingFolder}/uuid_uvgrd_10_m_above_ground.grib2`,
+          variables: ['UGRD', 'VGRD'],
+          levels: ['10 m above ground'],
+        },
+      ],
       runtimes: ['2021-06-16 01:00:00+00'],
       geoJsons: [],
     });

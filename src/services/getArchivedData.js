@@ -102,9 +102,17 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
   const bboxPolygon = turf.bboxPolygon(bbox);
   const files = await getWeatherFilesByRegion(bboxPolygon, startTime, endTime);
 
+  const activeDownloadList = new Map();
   const data = await Promise.all(
     files.map(async (row) => {
+      while (activeDownloadList.size >= 10) {
+        logger.info('More than 10 files are in active download!');
+        await new Promise((resolve) => {
+          setTimeout(resolve, 10000);
+        });
+      }
       const { id, model, start_time, end_time, grib_file_url } = row;
+      activeDownloadList.set(id, 'processing');
       const downloadPath = path.resolve(
         __dirname,
         `../../operating_folder/${id}.grib2`,
@@ -115,33 +123,62 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
         logger.error(`Error downloading grib: ${error.message}`);
         return [];
       }
+      activeDownloadList.delete(id);
 
-      const { slicedGrib, geoJsons, levels, variables, runtimes } =
-        sliceGribByRegion(bbox, downloadPath, {
+      const currentTime = new Date();
+      const currentYear = String(currentTime.getUTCFullYear());
+      const currentMonth = String(currentTime.getUTCMonth() + 1).padStart(
+        2,
+        '0',
+      );
+      const currentDate = String(currentTime.getUTCDate()).padStart(2, '0');
+
+      const { slicedGribs, geoJsons, runtimes } = sliceGribByRegion(
+        bbox,
+        downloadPath,
+        {
           folder: path.resolve(__dirname, `../../operating_folder/`),
           fileID: id,
           model,
-        });
-      // Smaller Grib upload process
-      let gribDetail = null;
-      const gribStream = fs.createReadStream(slicedGrib);
-      const gribUuid = uuidv4();
-      try {
-        const {
-          writeStream: gribWriteStream,
-          uploadPromise: gribUploadPromise,
-        } = uploadStreamToS3(`gribs/${model}/${gribUuid}.grib2`, slicedBucket);
-        gribStream.on('open', function () {
-          gribStream.pipe(gribWriteStream);
-        });
-        gribDetail = await gribUploadPromise;
-      } catch (error) {
-        logger.error(`Error uploading grib: ${error.message}`);
-      }
+        },
+      );
+      // Gribs upload process
+      const gribFiles = await Promise.all(
+        slicedGribs.map(async (slicedGrib) => {
+          const { filePath, variables, levels } = slicedGrib;
+          let gribDetail = null;
+          const gribStream = fs.createReadStream(filePath);
+          const gribUuid = uuidv4();
+          try {
+            const {
+              writeStream: gribWriteStream,
+              uploadPromise: gribUploadPromise,
+            } = uploadStreamToS3(
+              `${model}/${currentYear}/${currentMonth}/${currentDate}/forecast/${variables.join(
+                '-',
+              )}/gribfile/${gribUuid}.grib2`,
+              slicedBucket,
+            );
+            gribStream.on('open', function () {
+              gribStream.pipe(gribWriteStream);
+            });
+            gribDetail = await gribUploadPromise;
+          } catch (error) {
+            logger.error(`Error uploading grib: ${error.message}`);
+          }
 
-      fs.unlink(slicedGrib, () => {
-        logger.info(`sliced grib of model ${model}-${id} has been deleted`);
-      });
+          fs.unlink(filePath, () => {
+            logger.info(`sliced grib of model ${model}-${id} has been deleted`);
+          });
+          return {
+            id: gribUuid,
+            s3Key: gribDetail ? gribDetail.Key : null,
+            variables,
+            levels,
+          };
+        }),
+      );
+
       // End of Smaller grib upload process
 
       // GeoJSON stream to s3
@@ -176,9 +213,12 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
                   gsVariables.add(variable);
                 }
               }
+              const variables = Array.from(gsVariables);
 
               const { writeStream, uploadPromise } = uploadStreamToS3(
-                `geojson/${model}/${uuid}.json`,
+                `${model}/${currentYear}/${currentMonth}/${currentDate}/forecast/${variables.join(
+                  '-',
+                )}/geojson/${uuid}.grib2`,
                 slicedBucket,
               );
               const readable = Readable.from([JSON.stringify(json)]);
@@ -192,8 +232,8 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
 
               return {
                 uuid,
-                start_time: `${json.properties.time}+00`,
-                end_time: endTime.toISOString(),
+                startTime: `${json.properties.time}+00`,
+                endTime: endTime.toISOString(),
                 key: jsonDetail.Key,
                 levels: gsLevels,
                 runtimes: gsTimes,
@@ -209,36 +249,38 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
       // Saving to DB
       const successJsons = jsonFiles.filter((row) => row !== null);
       const arrayData = [
-        ...(gribDetail
-          ? [
-              {
-                id: gribUuid,
-                model,
-                start_time,
-                end_time,
-                s3_key: gribDetail.Key,
-                file_type: 'GRIB',
-                bounding_box: bboxPolygon.geometry,
-                levels,
-                variables,
-                runtimes,
-                race_id: raceID,
-              },
-            ]
-          : []),
+        ...gribFiles
+          .filter((row) => {
+            return row.s3Key !== null;
+          })
+          .map((row) => {
+            return {
+              id: row.id,
+              model,
+              startTime: start_time,
+              endTime: end_time,
+              s3Key: row.s3Key,
+              fileType: 'GRIB',
+              boundingBox: bboxPolygon.geometry,
+              levels: row.levels,
+              variables: row.variables,
+              runtimes,
+              competitionUnitId: raceID,
+            };
+          }),
         ...successJsons.map((row) => {
           return {
             id: row.uuid,
             model,
-            start_time: row.start_time, // Since json files only 1 runtime for each file, need to replace start_time of the grib
-            end_time: row.end_time,
-            s3_key: row.key,
-            file_type: 'JSON',
-            bounding_box: bboxPolygon.geometry,
+            startTime: row.startTime,
+            endTime: row.endTime,
+            s3Key: row.key,
+            fileType: 'JSON',
+            boundingBox: bboxPolygon.geometry,
             levels: row.levels,
             variables: row.variables,
             runtimes: row.runtimes,
-            race_id: raceID,
+            competitionUnitId: raceID,
           };
         }),
       ];
