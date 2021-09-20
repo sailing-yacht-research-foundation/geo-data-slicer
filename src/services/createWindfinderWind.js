@@ -183,6 +183,7 @@ async function createWindfinderWind(
         }
       }
       if (i % 5 === 0) {
+        // TODO: Quickfix for 429 problems. Probably could use circuit-breaker lib for this in the future
         await new Promise((resolve) => {
           setTimeout(() => {
             resolve();
