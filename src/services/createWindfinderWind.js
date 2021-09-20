@@ -2,6 +2,7 @@ const puppeteer = require('puppeteer');
 const axios = require('axios');
 const turf = require('@turf/turf');
 
+const logger = require('../logger');
 const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
 
 async function _MANUAL_getWindfinderToken() {
@@ -106,29 +107,34 @@ async function getWindfinderToken(windfinderUrl) {
 
 async function requestWindfinderReport(spotID, token) {
   const dataUrl = `https://api.windfinder.com/v2/spots/${spotID}/reports/?limit=-1&timespan=last24h&step=1m&customer=wfweb&version=1.0&token=${token}`;
-  const reportData = await axios.get(dataUrl);
   const reports = [];
-  if (Array.isArray(reportData.data) && reportData.data.length > 0) {
-    reportData.data.forEach((datum) => {
-      // "ws":8,"wd":90,"at":29.0,"ap":927,"cl":25,"dtl":"2021-07-05T13:00:00+07:00","dtl_s":"2021-07-05T12:59:30+07:00"
-      // TODO: what are these two times?
-      const time1 = new Date(datum.dtl); // This is the data shown on their graph
-      const time2 = new Date(datum.dtl_s); // not sure about this one
-      const windSpeedKTS = datum.ws;
-      const windGustKTS = datum.wg; // This possibly null, when I tested a spot in Indonesia, there's no gust value
-      const windDirectionDegrees = datum.wd;
-      const atmosphericPressureMB = datum.ap;
+  try {
+    const reportData = await axios.get(dataUrl);
+    if (Array.isArray(reportData.data) && reportData.data.length > 0) {
+      reportData.data.forEach((datum) => {
+        // "ws":8,"wd":90,"at":29.0,"ap":927,"cl":25,"dtl":"2021-07-05T13:00:00+07:00","dtl_s":"2021-07-05T12:59:30+07:00"
+        // TODO: what are these two times?
+        const time1 = new Date(datum.dtl); // This is the data shown on their graph
+        const time2 = new Date(datum.dtl_s); // not sure about this one
+        const windSpeedKTS = datum.ws;
+        const windGustKTS = datum.wg; // This possibly null, when I tested a spot in Indonesia, there's no gust value
+        const windDirectionDegrees = datum.wd;
+        const atmosphericPressureMB = datum.ap;
 
-      reports.push({
-        windSpeedKTS,
-        windGustKTS,
-        windDirectionDegrees,
-        atmosphericPressureMB,
-        time1,
-        time2,
+        reports.push({
+          windSpeedKTS,
+          windGustKTS,
+          windDirectionDegrees,
+          atmosphericPressureMB,
+          time1,
+          time2,
+        });
       });
-    });
+    }
+  } catch (error) {
+    logger.error(`Error scraping Windfinder: ${error.message}`);
   }
+
   return reports;
 }
 
@@ -175,6 +181,13 @@ async function createWindfinderWind(
         if (stopOnFirstReport) {
           break;
         }
+      }
+      if (i % 5 === 0) {
+        await new Promise((resolve) => {
+          setTimeout(() => {
+            resolve();
+          }, 1000);
+        });
       }
     }
   }
