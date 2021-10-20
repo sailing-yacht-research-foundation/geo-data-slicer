@@ -3,6 +3,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { Readable } = require('stream');
 const turf = require('@turf/turf');
+const { Op } = require('sequelize');
 
 const db = require('../models');
 const mainDB = require('../models/mainDB');
@@ -57,7 +58,12 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
     type: db.sequelize.QueryTypes.SELECT,
   });
 
-  let modelsToFetch = ['GFS', 'RTOFS_GLOBAL', 'ARPEGE_WORLD'];
+  const globalModels = await db.sourceModel.findAll({
+    attributes: ['model_name'],
+    where: { spatial_boundary: { [Op.eq]: null } },
+    raw: true,
+  });
+  let modelsToFetch = globalModels.map((row) => row.model_name);
   if (result.length > 0) {
     modelsToFetch = [
       ...modelsToFetch,
