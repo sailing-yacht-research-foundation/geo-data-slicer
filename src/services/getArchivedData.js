@@ -3,7 +3,6 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { Readable } = require('stream');
 const turf = require('@turf/turf');
-const { Op } = require('sequelize');
 
 const db = require('../models');
 const mainDB = require('../models/mainDB');
@@ -224,7 +223,7 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
               const { writeStream, uploadPromise } = uploadStreamToS3(
                 `${model}/${currentYear}/${currentMonth}/${currentDate}/forecast/${variables.join(
                   '-',
-                )}/geojson/${uuid}.grib2`,
+                )}/geojson/${uuid}.json`,
                 slicedBucket,
               );
               const readable = Readable.from([JSON.stringify(json)]);

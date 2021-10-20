@@ -12,7 +12,7 @@ const INCLUDED_LEVELS = {
     // 'atmos col',
     'surface',
   ],
-  GFS: ['10 m above ground', '40 m above ground'],
+  // GFS: ['10 m above ground', '40 m above ground'],
   RTOFS_GLOBAL: ['0 m below sea level'],
   // Regionals
   AROME_FRANCE: [
@@ -82,10 +82,11 @@ function sliceGribByRegion(bbox, filename, options) {
         ]);
       }
     }
+
     if (INCLUDED_LEVELS[model]) {
       return INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1;
     }
-    return false;
+    return true; // Non-defined levels are now all included (ERA5 files support)
   });
 
   let slicedGribs = [];
