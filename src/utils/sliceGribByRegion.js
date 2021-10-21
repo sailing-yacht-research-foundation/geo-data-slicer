@@ -86,7 +86,7 @@ function sliceGribByRegion(bbox, filename, options) {
     if (INCLUDED_LEVELS[model]) {
       return INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1;
     }
-    return true; // Non-defined levels are now all included (ERA5 files support)
+    return true; // Non-defined models are now all included (ERA5 files support)
   });
 
   let slicedGribs = [];
