@@ -1,0 +1,14 @@
+version: 0.0
+os: linux
+files:
+ - source: .
+   destination: /home/ubuntu/geo-data-slicer/geo-data-slicer/
+hooks:
+  ApplicationStop:
+   - location: stop.sh
+     timeout: 300
+     runas: ubuntu
+  ApplicationStart:
+   - location: run.sh
+     timeout: 300
+     runas: ubuntu
