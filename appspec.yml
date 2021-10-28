@@ -5,10 +5,10 @@ files:
    destination: /home/ubuntu/geo-data-slicer/geo-data-slicer/
 hooks:
   ApplicationStop:
-   - location: stop.sh
+   - location: scripts/stop
      timeout: 300
      runas: root
   ApplicationStart:
-   - location: run.sh
+   - location: scripts/start_server
      timeout: 300
      runas: root
