@@ -6,7 +6,7 @@ chmod -R 777 /home/ubuntu/geo-data-slicer/geo-data-slicer
 
 # navigate into current working directory
 
-cd /home/ubuntu/geo-data-slicer
+cd /home/ubuntu/geo-data-slicer/geo-data-slicer/
 
 # run docker command to build the application
 
