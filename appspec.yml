@@ -4,11 +4,12 @@ files:
  - source: .
    destination: /home/ubuntu/geo-data-slicer/geo-data-slicer/
 
-permissions: 
-  - object: /
-    pattern: "**"
-    owner: ubuntu
-    group: ubuntu
+#permissions: 
+#  - object: /
+#    pattern: "**"
+#    owner: ubuntu
+#    group: ubuntu
+
 hooks:
   ApplicationStop:
    - location: stop.sh
