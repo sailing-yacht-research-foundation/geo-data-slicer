@@ -8,4 +8,4 @@ chmod -R 777 /home/ubuntu/geo-data-slicer/geo-data-slicer
 
 cd /home/ubuntu/geo-data-slicer/geo-data-slicer/
 
-rm -rf package.json
+rm -rf *
