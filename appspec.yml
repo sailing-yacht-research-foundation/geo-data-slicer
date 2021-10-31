@@ -12,6 +12,10 @@ files:
 #    group: ubuntu
 
 hooks:
+  BeforeInstall:
+   - location: delete.sh
+     timeout: 300
+     runas: root
   ApplicationStop:
    - location: stop.sh
      timeout: 300
