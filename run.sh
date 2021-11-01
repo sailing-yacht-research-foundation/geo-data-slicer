@@ -10,7 +10,7 @@ cd /home/ubuntu/geo-data-slicer/geo-data-slicer/
 
 # run docker command to build the application
 
-docker build -t slicer .
+sudo docker build -t slicer .
 
 # run docker command to start the application
-docker run -d --env-file=envfile -p 3000:3000 slicer
+sudo docker run -d --env-file=envfile -p 3000:3000 slicer
