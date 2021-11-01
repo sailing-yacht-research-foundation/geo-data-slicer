@@ -70,7 +70,7 @@ RUN tar -xzf wgrib2.tgz \
 RUN cp grib2/wgrib2/wgrib2 /usr/local/bin \
     && rm -rf grib2 \
     && rm wgrib2.tgz
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata
 RUN ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime
 RUN dpkg-reconfigure --frontend noninteractive tzdata
 RUN apt-get install cdo -y
@@ -169,9 +169,10 @@ RUN aptitude install nco -y
 RUN apt-get update && \
     add-apt-repository -y ppa:linuxuprising/java && \
     apt-get update && \
-    echo oracle-java16-installer shared/accepted-oracle-license-v1-2 select true | /usr/bin/debconf-set-selections && \
-    apt-get install -y oracle-java16-installer && \
-    apt install oracle-java16-set-default
+    echo oracle-java17-installer shared/accepted-oracle-license-v1-3 select true | /usr/bin/debconf-set-selections && \
+    echo oracle-java17-installer shared/accepted-oracle-licence-v1-3 boolean true | /usr/bin/debconf-set-selections && \
+    yes | apt-get install -y oracle-java17-installer && \
+    yes | apt install -y oracle-java17-set-default
 
 RUN npm install -g weacast-grib2json
 RUN export JAVA_HOME=/usr
@@ -179,8 +180,10 @@ RUN export PATH=$PATH:/usr/lib/node_modules/weacast-grib2json/bin
 
 # Thank goodness we're done.
 
-# PM2 Process Manager
-RUN npm install pm2 -g
-
 WORKDIR /data
-CMD /bin/zsh
+
+COPY package*.json ./
+RUN npm install --production --silent
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
