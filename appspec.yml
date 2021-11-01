@@ -5,11 +5,11 @@ files:
    destination: /home/ubuntu/geo-data-slicer/geo-data-slicer/
    file_exists_behavior: OVERWRITE
 
-#permissions: 
-#  - object: /
-#    pattern: "**"
-#    owner: ubuntu
-#    group: ubuntu
+permissions: 
+  - object: /
+    pattern: "**"
+    owner: ubuntu
+    group: ubuntu
 
 hooks:
   BeforeInstall:
