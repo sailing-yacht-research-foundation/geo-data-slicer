@@ -57,7 +57,12 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
     type: db.sequelize.QueryTypes.SELECT,
   });
 
-  let modelsToFetch = ['GFS', 'RTOFS_GLOBAL', 'ARPEGE_WORLD'];
+  const globalModels = await db.sourceModel.findAll({
+    attributes: ['model_name'],
+    where: { spatial_boundary: { [Op.eq]: null } },
+    raw: true,
+  });
+  let modelsToFetch = globalModels.map((row) => row.model_name);
   if (result.length > 0) {
     modelsToFetch = [
       ...modelsToFetch,
@@ -218,7 +223,7 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
               const { writeStream, uploadPromise } = uploadStreamToS3(
                 `${model}/${currentYear}/${currentMonth}/${currentDate}/forecast/${variables.join(
                   '-',
-                )}/geojson/${uuid}.grib2`,
+                )}/geojson/${uuid}.json`,
                 slicedBucket,
               );
               const readable = Readable.from([JSON.stringify(json)]);
