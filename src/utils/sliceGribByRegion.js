@@ -130,11 +130,29 @@ function sliceGribByRegion(bbox, filename, options) {
               levels: [level],
             });
           });
-
+          break;
+        case 'UGUST':
+          levelsAvailable.forEach((level) => {
+            execSync(
+              `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UGUST|VGUST):(${varLevels}):" -grib_out ${folder}/${fileID}_uvgust_${level.replace(
+                / /g,
+                '_',
+              )}.grib2`,
+            );
+            slicedGribs.push({
+              filePath: `${folder}/${fileID}_uvgust_${level.replace(
+                / /g,
+                '_',
+              )}.grib2`,
+              variables: ['UGUST', 'VGUST'],
+              levels: [level],
+            });
+          });
           break;
         case 'VGRD':
         case 'VOGRD':
-          // Ignore these 2, combined with their u-couterpart
+        case 'VGUST':
+          // Ignore these 3, combined with their u-couterpart
           break;
         default:
           levelsAvailable.forEach((level) => {
