@@ -195,13 +195,9 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
             const jsonStartTimeUnix = Date.parse(jsonStartTime);
             const jsonEndTimeUnix = new Date(
               jsonStartTimeUnix + endTimeModifier,
-            );
+            ).getTime();
 
-            if (
-              (jsonStartTimeUnix <= endTime &&
-                jsonStartTimeUnix >= startTime) ||
-              (jsonEndTimeUnix <= endTime && jsonEndTimeUnix >= startTime)
-            ) {
+            if (startTime <= jsonEndTimeUnix && endTime >= jsonStartTimeUnix) {
               return true;
             }
             return false;
