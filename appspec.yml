@@ -22,5 +22,5 @@ hooks:
     #runas: ubuntu
   ApplicationStart:
    - location: run.sh
-     timeout: 300
+     timeout: 400
      runas: ubuntu
