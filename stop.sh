@@ -2,4 +2,4 @@
 
 # stop existing container
 
-sudo docker stop d821077b6431
+sudo docker stop $(docker ps -q --filter ancestor=slicer )
