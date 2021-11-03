@@ -1,0 +1,17 @@
+NODE_ENV=development
+AWS_S3_ACCESS_KEY_ID=AKIAU4MUOS3JMUAX7XP2
+AWS_S3_SECRET_ACCESS_KEY=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
+AWS_S3_BUCKET=syrf-weather
+AWS_S3_SLICED_BUCKET=syrf-sliced-weather
+
+DB_HOST=ec2-54-167-184-6.compute-1.amazonaws.com
+DB_PORT=5432
+DB_NAME=weather_db
+DB_USER=ubuntu
+DB_PASSWORD=ubuntu
+
+MAIN_DB_HOST=syrf-backend-development.csvvxrzxjbev.us-east-1.rds.amazonaws.com
+MAIN_DB_PORT=5432
+MAIN_DB_NAME=syrfbackend
+MAIN_DB_USER=postgres
+MAIN_DB_PASSWORD=BcQPSawt3CPFr3f
