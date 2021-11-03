@@ -2,4 +2,4 @@
 
 # stop existing container
 
-#docker stop $(docker ps -q --filter ancestor=slicer )
+sudo docker stop $(docker ps -q --filter ancestor=slicer )
