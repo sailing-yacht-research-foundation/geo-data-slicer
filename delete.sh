@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# give permission to the files inside /secure_docs directory
+# give permission to the files inside the directory
 
 chmod -R 777 /home/ubuntu/geo-data-slicer
 
