@@ -12,15 +12,11 @@ permissions:
     group: ubuntu
 
 hooks:
-  #BeforeInstall:
-   #- location: delete.sh
-    # timeout: 300
-     #runas: ubuntu
   ApplicationStop:
    - location: stop.sh
      timeout: 300
      runas: ubuntu
   ApplicationStart:
    - location: run.sh
-     timeout: 400
+     timeout: 1000
      runas: ubuntu
