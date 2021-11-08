@@ -12,10 +12,6 @@ permissions:
     group: ubuntu
 
 hooks:
-  ApplicationStop:
-   - location: stop.sh
-     timeout: 300
-     runas: ubuntu
   ApplicationStart:
    - location: run.sh
      timeout: 1000
