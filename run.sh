@@ -4,7 +4,7 @@
 
 chmod -R 777 /home/ubuntu/geo-data-slicer
 
-# navigate into current working directory
+# navigate into current working directory.
 
 cd /home/ubuntu/geo-data-slicer
 
