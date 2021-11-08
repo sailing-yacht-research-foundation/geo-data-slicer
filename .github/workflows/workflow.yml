@@ -25,6 +25,6 @@ jobs:
         run: |
           aws deploy create-deployment \
             --application-name geo-data-slicer-prod \
-            --deployment-group-name slicercicdDeploymentgroup \
+            --deployment-group-name slicerDeploymentgroup \
             --deployment-config-name CodeDeployDefault.OneAtATime \
             --github-location repository=${{ github.repository }},commitId=${{ github.sha }}
