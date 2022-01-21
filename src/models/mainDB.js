@@ -41,4 +41,9 @@ mainDB.slicedWeather = require('./slicedWeather.model.js')(
   Sequelize,
 );
 
+mainDB.startDB = async () => {
+  await sequelize.authenticate();
+  console.log('Main DB connected');
+};
+
 module.exports = mainDB;

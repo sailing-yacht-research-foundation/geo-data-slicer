@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon -L src/main.js",
     "start": "node src/main.js",
+    "start:pm2": "pm2-runtime src/main.js",
     "test": "jest --coverage --runInBand"
   },
   "repository": {
