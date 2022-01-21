@@ -181,9 +181,10 @@ RUN export PATH=$PATH:/usr/lib/node_modules/weacast-grib2json/bin
 # Thank goodness we're done.
 
 WORKDIR /data
+RUN npm install pm2 -g
 
 COPY package*.json ./
 RUN npm install --production --silent
 COPY . .
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["npm", "run", "start:pm2"]
