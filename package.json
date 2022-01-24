@@ -1,11 +1,12 @@
 {
   "name": "geo-data-slicer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Grab some geo data.",
   "main": "src/main.js",
   "scripts": {
     "dev": "nodemon -L src/main.js",
     "start": "node src/main.js",
+    "start:pm2": "pm2-runtime src/main.js",
     "test": "jest --coverage --runInBand"
   },
   "repository": {

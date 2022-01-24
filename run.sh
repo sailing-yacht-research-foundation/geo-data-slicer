@@ -4,7 +4,7 @@
 
 chmod -R 777 /home/ubuntu/geo-data-slicer
 
-# navigate into current working directory.
+# navigate into current working directory
 
 cd /home/ubuntu/geo-data-slicer
 
@@ -13,13 +13,13 @@ cd /home/ubuntu/geo-data-slicer
 sudo docker build -t slicer .
 
 # stop existing container
-sudo docker stop $(docker ps -q --filter ancestor=slicer )
+sudo docker stop slicer
+
+# remove stopped container
+sudo docker rm slicer
 
 # run docker command to start the application
-sudo docker run -d --env-file=.env -p 3000:3000 slicer:latest
-
-#delete unsued containers
-sudo docker rm $(docker ps -q -f status=exited)
+sudo docker run -d --restart unless-stopped --env-file=.env -p 3000:3000 --name slicer slicer:latest
 
 #delete unused images
 sudo docker rmi $(docker images -q -f dangling=true)

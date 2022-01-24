@@ -25,4 +25,9 @@ db.sequelize = sequelize;
 db.sourceModel = require('./sourceModel.model.js')(sequelize, Sequelize);
 db.weatherData = require('./weatherData.model.js')(sequelize, Sequelize);
 
+db.startDB = async () => {
+  await sequelize.authenticate();
+  console.log('Weather DB connected');
+};
+
 module.exports = db;

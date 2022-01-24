@@ -3,6 +3,7 @@ const execSync = require('child_process').execSync;
 
 const parseCsvData = require('./parseCsvData');
 const makeGeoJsons = require('./makeGeoJsons');
+const logger = require('../logger');
 
 const INCLUDED_LEVELS = {
   ARPEGE_WORLD: [
@@ -47,125 +48,153 @@ function sliceGribByRegion(bbox, filename, options) {
   const rightLon = Math.ceil(bbox[2]);
   const topLat = Math.ceil(bbox[3]);
 
-  execSync(
-    `wgrib2 ${filename} -small_grib ${leftLon}:${rightLon} ${bottomLat}:${topLat} ${folder}/small_${fileID}.grib2`,
-  );
-  execSync(
-    `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
-  );
-  fs.unlinkSync(filename);
-  const csvData = fs.readFileSync(`${folder}/${fileID}.csv`, 'utf-8');
-  fs.unlinkSync(`${folder}/${fileID}.csv`);
-  const parsedData = parseCsvData(csvData);
-  const geoJsons = makeGeoJsons(parsedData);
+  try {
+    execSync(
+      `wgrib2 ${filename} -small_grib ${leftLon}:${rightLon} ${bottomLat}:${topLat} ${folder}/small_${fileID}.grib2`,
+    );
+    execSync(
+      `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
+    );
+    fs.unlinkSync(filename);
+    const csvData = fs.readFileSync(`${folder}/${fileID}.csv`, 'utf-8');
+    fs.unlinkSync(`${folder}/${fileID}.csv`);
+    const parsedData = parseCsvData(csvData);
+    const geoJsons = makeGeoJsons(parsedData);
 
-  const levels = new Set();
-  const runtimes = new Set();
-  const variables = new Set();
-  const variablesToLevel = new Map();
+    const levels = new Set();
+    const runtimes = new Set();
+    const variables = new Set();
+    const variablesToLevel = new Map();
 
-  const finalResult = geoJsons.filter((geoJson) => {
-    levels.add(geoJson.properties.level);
-    runtimes.add(`${geoJson.properties.time}+00`);
-    for (const variable in geoJson.features[0].properties) {
-      variables.add(variable);
-      const existingVTL = variablesToLevel.get(variable) || [];
-      if (
-        existingVTL.indexOf(geoJson.properties.level) === -1 &&
-        ((INCLUDED_LEVELS[model] &&
-          INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1) ||
-          !INCLUDED_LEVELS[model])
-      ) {
-        variablesToLevel.set(variable, [
-          ...existingVTL,
-          geoJson.properties.level,
-        ]);
+    const finalResult = geoJsons.filter((geoJson) => {
+      levels.add(geoJson.properties.level);
+      runtimes.add(`${geoJson.properties.time}+00`);
+      for (const variable in geoJson.features[0].properties) {
+        variables.add(variable);
+        const existingVTL = variablesToLevel.get(variable) || [];
+        if (
+          existingVTL.indexOf(geoJson.properties.level) === -1 &&
+          ((INCLUDED_LEVELS[model] &&
+            INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1) ||
+            !INCLUDED_LEVELS[model])
+        ) {
+          variablesToLevel.set(variable, [
+            ...existingVTL,
+            geoJson.properties.level,
+          ]);
+        }
       }
-    }
 
-    if (INCLUDED_LEVELS[model]) {
-      return INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1;
-    }
-    return true; // Non-defined models are now all included (ERA5 files support)
-  });
-
-  let slicedGribs = [];
-  variables.forEach((variable) => {
-    const levelsAvailable = variablesToLevel.get(variable);
-    if (levelsAvailable && levelsAvailable.length > 0) {
-      let varLevels = Array.from(levelsAvailable).join('|');
-      switch (variable) {
-        case 'UGRD':
-          levelsAvailable.forEach((level) => {
-            execSync(
-              `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UGRD|VGRD):(${level}):" -grib_out ${folder}/${fileID}_uvgrd_${level.replace(
-                / /g,
-                '_',
-              )}.grib2`,
-            );
-            slicedGribs.push({
-              filePath: `${folder}/${fileID}_uvgrd_${level.replace(
-                / /g,
-                '_',
-              )}.grib2`,
-              variables: ['UGRD', 'VGRD'],
-              levels: [level],
-            });
-          });
-          break;
-        case 'UOGRD':
-          levelsAvailable.forEach((level) => {
-            execSync(
-              `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UOGRD|VOGRD):(${varLevels}):" -grib_out ${folder}/${fileID}_uvogrd_${level.replace(
-                / /g,
-                '_',
-              )}.grib2`,
-            );
-            slicedGribs.push({
-              filePath: `${folder}/${fileID}_uvogrd_${level.replace(
-                / /g,
-                '_',
-              )}.grib2`,
-              variables: ['UOGRD', 'VOGRD'],
-              levels: [level],
-            });
-          });
-
-          break;
-        case 'VGRD':
-        case 'VOGRD':
-          // Ignore these 2, combined with their u-couterpart
-          break;
-        default:
-          levelsAvailable.forEach((level) => {
-            execSync(
-              `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(${variable}):(${varLevels}):" -grib_out ${folder}/${fileID}_${variable}_${level.replace(
-                / /g,
-                '_',
-              )}.grib2`,
-            );
-            slicedGribs.push({
-              filePath: `${folder}/${fileID}_${variable}_${level.replace(
-                / /g,
-                '_',
-              )}.grib2`,
-              variables: [variable],
-              levels: [level],
-            });
-          });
-
-          break;
+      if (INCLUDED_LEVELS[model]) {
+        return INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1;
       }
-    }
-  });
+      return true; // Non-defined models are now all included (ERA5 files support)
+    });
 
-  fs.unlinkSync(`${folder}/small_${fileID}.grib2`);
+    let slicedGribs = [];
+    variables.forEach((variable) => {
+      const levelsAvailable = variablesToLevel.get(variable);
+      if (levelsAvailable && levelsAvailable.length > 0) {
+        let varLevels = Array.from(levelsAvailable).join('|');
+        switch (variable) {
+          case 'UGRD':
+            levelsAvailable.forEach((level) => {
+              execSync(
+                `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UGRD|VGRD):(${level}):" -grib_out ${folder}/${fileID}_uvgrd_${level.replace(
+                  / /g,
+                  '_',
+                )}.grib2`,
+              );
+              slicedGribs.push({
+                filePath: `${folder}/${fileID}_uvgrd_${level.replace(
+                  / /g,
+                  '_',
+                )}.grib2`,
+                variables: ['UGRD', 'VGRD'],
+                levels: [level],
+              });
+            });
+            break;
+          case 'UOGRD':
+            levelsAvailable.forEach((level) => {
+              execSync(
+                `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UOGRD|VOGRD):(${varLevels}):" -grib_out ${folder}/${fileID}_uvogrd_${level.replace(
+                  / /g,
+                  '_',
+                )}.grib2`,
+              );
+              slicedGribs.push({
+                filePath: `${folder}/${fileID}_uvogrd_${level.replace(
+                  / /g,
+                  '_',
+                )}.grib2`,
+                variables: ['UOGRD', 'VOGRD'],
+                levels: [level],
+              });
+            });
+            break;
+          case 'UGUST':
+            levelsAvailable.forEach((level) => {
+              execSync(
+                `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UGUST|VGUST):(${varLevels}):" -grib_out ${folder}/${fileID}_uvgust_${level.replace(
+                  / /g,
+                  '_',
+                )}.grib2`,
+              );
+              slicedGribs.push({
+                filePath: `${folder}/${fileID}_uvgust_${level.replace(
+                  / /g,
+                  '_',
+                )}.grib2`,
+                variables: ['UGUST', 'VGUST'],
+                levels: [level],
+              });
+            });
+            break;
+          case 'VGRD':
+          case 'VOGRD':
+          case 'VGUST':
+            // Ignore these 3, combined with their u-couterpart
+            break;
+          default:
+            levelsAvailable.forEach((level) => {
+              execSync(
+                `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(${variable}):(${varLevels}):" -grib_out ${folder}/${fileID}_${variable}_${level.replace(
+                  / /g,
+                  '_',
+                )}.grib2`,
+              );
+              slicedGribs.push({
+                filePath: `${folder}/${fileID}_${variable}_${level.replace(
+                  / /g,
+                  '_',
+                )}.grib2`,
+                variables: [variable],
+                levels: [level],
+              });
+            });
 
-  return {
-    slicedGribs,
-    geoJsons: finalResult,
-    runtimes: Array.from(runtimes),
-  };
+            break;
+        }
+      }
+    });
+
+    fs.unlinkSync(`${folder}/small_${fileID}.grib2`);
+
+    return {
+      slicedGribs,
+      geoJsons: finalResult,
+      runtimes: Array.from(runtimes),
+    };
+  } catch (error) {
+    logger.error(`Error slicing grib by region: ${error.message}`);
+    logger.error(error);
+    return {
+      slicedGribs: [],
+      geoJsons: [],
+      runtimes: [],
+    };
+  }
 }
 
 module.exports = sliceGribByRegion;

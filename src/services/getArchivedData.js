@@ -138,6 +138,12 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
       );
       const currentDate = String(currentTime.getUTCDate()).padStart(2, '0');
 
+      if (!fs.existsSync(downloadPath)) {
+        logger.error(
+          `Download didn't fail, but file doesn't exist at download path. ID: ${id}, timestamp: ${currentTime.toISOString()}`,
+        );
+        return [];
+      }
       const { slicedGribs, geoJsons, runtimes } = sliceGribByRegion(
         bbox,
         downloadPath,
@@ -195,13 +201,9 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
             const jsonStartTimeUnix = Date.parse(jsonStartTime);
             const jsonEndTimeUnix = new Date(
               jsonStartTimeUnix + endTimeModifier,
-            );
+            ).getTime();
 
-            if (
-              (jsonStartTimeUnix <= endTime &&
-                jsonStartTimeUnix >= startTime) ||
-              (jsonEndTimeUnix <= endTime && jsonEndTimeUnix >= startTime)
-            ) {
+            if (startTime <= jsonEndTimeUnix && endTime >= jsonStartTimeUnix) {
               return true;
             }
             return false;
