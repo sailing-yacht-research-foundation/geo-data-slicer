@@ -48,7 +48,8 @@ describe('HTTP Server for Geo Data Slicer', () => {
       .then((response) => {
         expect(response.text).toBe(
           JSON.stringify({
-            message: 'Fields required: roi, startTimeUnixMS, endTimeUnixMS',
+            message:
+              'Fields required: roi, startTimeUnixMS, endTimeUnixMS, payload',
           }),
         );
         done();
@@ -119,7 +120,7 @@ describe('HTTP Server for Geo Data Slicer', () => {
       .then((response) => {
         expect(response.text).toBe(
           JSON.stringify({
-            message: 'Fields required: startTimeUnixMS, endTimeUnixMS',
+            message: 'Fields required: startTimeUnixMS, endTimeUnixMS, payload',
           }),
         );
         done();
@@ -280,6 +281,9 @@ describe('HTTP Server for Geo Data Slicer', () => {
         startTimeUnixMS: 1626660309015,
         endTimeUnixMS: 1626663909015,
         webhook: 'https://webhook.site/some/path',
+        payload: {
+          raceID: 'a1ed42f4-eb5d-4a62-8667-073ec256f6ab',
+        },
       })
       .expect(200);
 
