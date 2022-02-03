@@ -50,6 +50,7 @@ const createShipReport = async (startTimeUnixMS, endTimeUnixMS) => {
   const twelveHoursAgo = currentTime - 1000 * 60 * 60 * 12;
   // We have no data available beyond these
   if (startTimeUnixMS > currentTime || endTimeUnixMS < twelveHoursAgo) {
+    logger.info(`Skipping ship report scrape, data won't be available`);
     return weatherSourceToFeatureCollection([]);
   }
 
