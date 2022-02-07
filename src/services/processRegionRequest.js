@@ -42,7 +42,6 @@ async function processRegionRequest(
   let windfinderPromise = null;
   let noaaBuoyPromise = null;
   if (turf.area(turf.bboxPolygon(containerBbox)) > MAX_AREA_CONCURRENT_RUN) {
-    // Larger than 100x100km area
     windfinderPromise = new Promise(() => {
       setTimeout(() => {
         weatherSourceToFeatureCollection([]);

@@ -29,15 +29,17 @@ class Queue {
     return firstElement;
   }
 
-  process() {
+  async process() {
     if (
       this.elements.length > 0 &&
       this.currentProcessing < this.maxConcurrentProcess
     ) {
       const nextData = this.dequeue();
       this.currentProcessing++;
+      logger.info(
+        `Processing next queue. Left in Queue: ${this.elements.length}, Currently Processing: ${this.currentProcessing}`,
+      );
       this.processFunction(nextData).then((result) => {
-        // Release this specific process
         this.results.push(result);
         this.currentProcessing--;
         this.process();

@@ -314,20 +314,23 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
   let maxConcurrentProcess = 3;
   if (turf.area(bboxPolygon) > MAX_AREA_CONCURRENT_RUN) {
     maxConcurrentProcess = 1;
+    console.log('maxConcurrent', maxConcurrentProcess, turf.area(bboxPolygon));
   }
   const queue = new Queue({
     maxConcurrentProcess,
     processFunction,
   });
-  files.forEach((row) => {
-    queue.enqueue({
-      ...row,
-      bbox,
-      searchStartTime: startTime,
-      searchEndTime: endTime,
-      raceID,
-    });
-  });
+  queue.enqueue(
+    files.map((row) => {
+      return {
+        ...row,
+        bbox,
+        searchStartTime: startTime,
+        searchEndTime: endTime,
+        raceID,
+      };
+    }),
+  );
 
   // TODO: Wait queue to finish and return
   return [];
