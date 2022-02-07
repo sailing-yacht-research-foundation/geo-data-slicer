@@ -312,7 +312,7 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
   const files = await getWeatherFilesByRegion(bboxPolygon, startTime, endTime);
 
   let maxConcurrentProcess = 3;
-  if (turf.area(turf.bboxPolygon(containerBbox)) > MAX_AREA_CONCURRENT_RUN) {
+  if (turf.area(bboxPolygon) > MAX_AREA_CONCURRENT_RUN) {
     maxConcurrentProcess = 1;
   }
   const queue = new Queue({
