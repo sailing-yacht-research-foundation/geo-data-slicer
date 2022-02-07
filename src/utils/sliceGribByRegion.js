@@ -1,10 +1,7 @@
 const fs = require('fs');
 const { promisify } = require('util');
 const execPromise = promisify(require('child_process').exec);
-const readFile = promisify(fs.readFile);
 
-const parseCsvData = require('./parseCsvData');
-const makeGeoJsons = require('./makeGeoJsons');
 const csvToGeoJson = require('./csvToGeoJson');
 const logger = require('../logger');
 
@@ -31,11 +28,7 @@ async function sliceGribByRegion(bbox, filename, options) {
     fs.unlinkSync(filename);
 
     const { runtimes, variables, variablesToLevel, geoJsons } =
-      await csvToGeoJson(
-        fileID,
-        model,
-        await readFile(`${folder}/${fileID}.csv`, 'utf-8'),
-      );
+      await csvToGeoJson(fileID, model, `${folder}/${fileID}.csv`);
     const used2 = process.memoryUsage().heapUsed / 1024 / 1024;
     console.log(
       `The script uses 2 approximately ${Math.round(used2 * 100) / 100} MB`,

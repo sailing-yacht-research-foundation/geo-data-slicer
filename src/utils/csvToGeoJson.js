@@ -3,6 +3,7 @@ const fs = require('fs');
 const { promisify } = require('util');
 const path = require('path');
 
+const readFile = promisify(fs.readFile);
 const writeFile = promisify(fs.writeFile);
 
 const INCLUDED_LEVELS = {
@@ -39,7 +40,8 @@ const INCLUDED_LEVELS = {
   HRRR_SUB_HOURLY: ['10 m above ground', 'surface'],
 };
 
-async function csvToGeoJson(id, model, csvData) {
+async function csvToGeoJson(id, model, csvFilePath) {
+  const csvData = await readFile(csvFilePath, 'utf-8');
   const operatingPath = path.resolve(__dirname, `../../operating_folder`);
   const varTotimeToLevelToPoints = {};
   const runtimes = new Set();
