@@ -214,7 +214,6 @@ async function processFunction(data) {
         try {
           const uuid = uuidv4();
           const { variables, time, level, filePath } = json;
-          const gsLevels = [level];
           const gsTimes = [`${time}+00`];
 
           const { writeStream, uploadPromise } = uploadStreamToS3(
@@ -235,12 +234,12 @@ async function processFunction(data) {
 
           return {
             uuid,
-            startTime: `${time}+00`,
+            startTime: startTimeInUnix,
             endTime: endTime.toISOString(),
             key: jsonDetail.Key,
-            levels: gsLevels,
+            levels: [level],
             runtimes: gsTimes,
-            variables: Array.from(gsVariables),
+            variables,
           };
         } catch (error) {
           logger.error(`Error uploading geojson: ${error.message}`);

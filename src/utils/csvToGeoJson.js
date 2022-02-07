@@ -1,6 +1,9 @@
 const turf = require('@turf/turf');
 const fs = require('fs');
+const { promisify } = require('util');
 const path = require('path');
+
+const writeFile = promisify(fs.writeFile);
 
 const INCLUDED_LEVELS = {
   ARPEGE_WORLD: [
@@ -114,76 +117,65 @@ async function csvToGeoJson(id, model, csvData) {
     }
   });
 
-  const promises = [];
-  Object.keys(varTotimeToLevelToPoints).forEach((varGroup) => {
-    Object.keys(varTotimeToLevelToPoints[varGroup]).forEach((time) => {
-      Object.keys(varTotimeToLevelToPoints[varGroup][time]).forEach((level) => {
+  const geoJsons = [];
+  for (const varGroup of Object.keys(varTotimeToLevelToPoints)) {
+    for (const time of Object.keys(varTotimeToLevelToPoints[varGroup])) {
+      for (const level of Object.keys(
+        varTotimeToLevelToPoints[varGroup][time],
+      )) {
         // Write to file instead
         const timeInMs = new Date(time).getTime();
-        promises.push(
-          new Promise((resolve) => {
-            const filePath = `${operatingPath}/${id}_${varGroup}_${timeInMs}_${level.replaceAll(
-              ' ',
-              '_',
-            )}.geojson`;
-            const variables = [];
-            switch (varGroup) {
-              case 'uvgrd':
-                variables.push('UGRD');
-                variables.push('VGRD');
-                break;
-              case 'uvogrd':
-                variables.push('UOGRD');
-                variables.push('VOGRD');
-              case 'uvgust':
-                variables.push('UGUST');
-                variables.push('VGUST');
-                break;
-              default:
-                variables.push(varGroup);
-                break;
-            }
-            fs.writeFile(
-              filePath,
-              JSON.stringify({
-                ...turf.featureCollection(
-                  Object.values(
-                    varTotimeToLevelToPoints[varGroup][time][level],
-                  ).map((p) => {
-                    try {
-                      const { lon, lat, ...otherProps } = p;
-                      return turf.point([p.lon, p.lat], otherProps);
-                    } catch (err) {}
-                  }),
-                ),
-                properties: {
-                  level: level.replace(/"/gm, ''),
-                  time: time.replace(/"/gm, ''),
-                },
+        const filePath = `${operatingPath}/${id}_${varGroup}_${timeInMs}_${level.replaceAll(
+          ' ',
+          '_',
+        )}.geojson`;
+        const variables = [];
+        switch (varGroup) {
+          case 'uvgrd':
+            variables.push('UGRD');
+            variables.push('VGRD');
+            break;
+          case 'uvogrd':
+            variables.push('UOGRD');
+            variables.push('VOGRD');
+          case 'uvgust':
+            variables.push('UGUST');
+            variables.push('VGUST');
+            break;
+          default:
+            variables.push(varGroup);
+            break;
+        }
+        await writeFile(
+          filePath,
+          JSON.stringify({
+            ...turf.featureCollection(
+              Object.values(
+                varTotimeToLevelToPoints[varGroup][time][level],
+              ).map((p) => {
+                try {
+                  const { lon, lat, ...otherProps } = p;
+                  return turf.point([p.lon, p.lat], otherProps);
+                } catch (err) {}
               }),
-              (err) => {
-                if (err) {
-                  console.error('Error saving geojson to fs');
-                  console.trace(err);
-                } else {
-                  resolve({
-                    varGroup,
-                    time,
-                    level,
-                    filePath,
-                    variables,
-                  });
-                }
-              },
-            );
+            ),
+            properties: {
+              level: level.replace(/"/gm, ''),
+              time: time.replace(/"/gm, ''),
+            },
           }),
         );
-      });
-    });
-  });
-  console.log('pl', promises.length);
-
-  const geoJsons = await Promise.all(promises);
+        geoJsons.push({
+          varGroup,
+          time,
+          level,
+          filePath,
+          variables,
+        });
+      }
+    }
+  }
+  console.log('geoJsons length', geoJsons.length);
   return {
     runtimes,
     variables,

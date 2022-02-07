@@ -37,19 +37,31 @@ async function processRegionRequest(
     raceID,
   );
 
-  const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
-
+  let shipReportPromise = null;
   let windfinderPromise = null;
   let noaaBuoyPromise = null;
   if (turf.area(turf.bboxPolygon(containerBbox)) > 10000000000) {
     // Larger than 100x100km area
-    windFinderPromise = new Promise(() => {
+    windfinderPromise = new Promise(() => {
+      setTimeout(() => {
+        weatherSourceToFeatureCollection([]);
+        return [];
+      }, 1000);
+    });
+    noaaBuoyPromise = new Promise(() => {
+      setTimeout(() => {
+        weatherSourceToFeatureCollection([]);
+        return [];
+      }, 1000);
+    });
+    shipReportPromise = new Promise(() => {
       setTimeout(() => {
         weatherSourceToFeatureCollection([]);
         return [];
       }, 1000);
     });
   } else {
+    shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
     const spots = windfinderIndex
       .range(
         containerBbox[0],
@@ -87,24 +99,24 @@ async function processRegionRequest(
     turf.bboxPolygon(containerBbox),
   );
 
-  if (webhook) {
-    try {
-      await axios({
-        url: webhook,
-        method: 'POST',
-        data: {
-          raceID,
-          token: webhookToken,
-          archivedData,
-          shipReports,
-          windfinderWinds,
-          noaaBuoyWinds,
-        },
-      });
-    } catch (error) {
-      logger.error(`Failed to send data to webhook. Error: ${error.message}`);
-    }
-  }
+  // if (webhook) {
+  //   try {
+  //     await axios({
+  //       url: webhook,
+  //       method: 'POST',
+  //       data: {
+  //         raceID,
+  //         token: webhookToken,
+  //         archivedData,
+  //         shipReports,
+  //         windfinderWinds,
+  //         noaaBuoyWinds,
+  //       },
+  //     });
+  //   } catch (error) {
+  //     logger.error(`Failed to send data to webhook. Error: ${error.message}`);
+  //   }
+  // }
 }
 
 module.exports = processRegionRequest;
