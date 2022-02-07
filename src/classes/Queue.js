@@ -1,7 +1,10 @@
+const logger = require('../logger');
+
 class Queue {
   constructor(params) {
     console.log(params);
     this.elements = [];
+    this.results = [];
     this.maxConcurrentProcess = params.maxConcurrentProcess;
     this.currentProcessing = 0;
     this.processFunction = params.processFunction;
@@ -34,13 +37,26 @@ class Queue {
     ) {
       const nextData = this.dequeue();
       this.currentProcessing++;
-      this.processFunction(nextData).then(() => {
+      this.processFunction(nextData).then((result) => {
         // Release this specific process
+        this.results.push(result);
         this.currentProcessing--;
         this.process();
       });
       this.process();
     }
+  }
+
+  async waitFinish() {
+    return new Promise((resolve) => {
+      let timerId = setInterval(() => {
+        if (this.currentProcessing === 0 && this.elements.length === 0) {
+          clearInterval(timerId);
+          resolve(this.results);
+          // TODO: cleanup this.results once sent to user
+        }
+      }, 5000);
+    });
   }
 }
 

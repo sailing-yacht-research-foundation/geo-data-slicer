@@ -11,6 +11,7 @@ const sliceGribByRegion = require('../utils/sliceGribByRegion');
 const uploadStreamToS3 = require('../utils/uploadStreamToS3');
 const logger = require('../logger');
 const { VALID_TIMEFRAME } = require('../configs/sourceModel.config');
+const Queue = require('../classes/Queue');
 
 const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
@@ -75,9 +76,10 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const startDate = new Date(startTime);
   const endDate = new Date(endTime);
   const files = await db.weatherData.findAll({
-    // limit: 3, //TODO: Remove limit after testing
+    limit: 2, //TODO: Remove limit after testing
     where: {
-      model: { [Op.in]: modelsToFetch },
+      // model: { [Op.in]: modelsToFetch },
+      model: 'ARPEGE_WORLD',
       [Op.or]: [
         {
           start_time: {
@@ -103,215 +105,218 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   return removeRedundantFiles(files);
 }
 
+async function processFunction(data) {
+  const {
+    id,
+    model,
+    start_time,
+    end_time,
+    grib_file_url,
+    bbox,
+    startTime,
+    endTime,
+    raceID,
+  } = data;
+  logger.info(`Processing ${model} - ${id}`);
+  const downloadPath = path.resolve(
+    __dirname,
+    `../../operating_folder/${id}.grib2`,
+  );
+  try {
+    await downloadFromS3(bucketName, grib_file_url, downloadPath);
+  } catch (error) {
+    logger.error(`Error downloading grib: ${error.message}`);
+    return [];
+  }
+  const bboxPolygon = turf.bboxPolygon(bbox);
+  const currentTime = new Date();
+  const currentYear = String(currentTime.getUTCFullYear());
+  const currentMonth = String(currentTime.getUTCMonth() + 1).padStart(2, '0');
+  const currentDate = String(currentTime.getUTCDate()).padStart(2, '0');
+
+  if (!fs.existsSync(downloadPath)) {
+    logger.error(
+      `Download didn't fail, but file doesn't exist at download path. ID: ${id}, timestamp: ${currentTime.toISOString()}`,
+    );
+    return [];
+  }
+  const { slicedGribs, geoJsons, runtimes } = await sliceGribByRegion(
+    bbox,
+    downloadPath,
+    {
+      folder: path.resolve(__dirname, `../../operating_folder/`),
+      fileID: id,
+      model,
+    },
+  );
+  const used = process.memoryUsage().heapUsed / 1024 / 1024;
+  console.log(`S script uses approximately ${Math.round(used * 100) / 100} MB`);
+  // Gribs upload process
+  logger.info(`Uploading gribs from processing ${id}`);
+  const gribFiles = await Promise.all(
+    slicedGribs.map(async (slicedGrib) => {
+      const { filePath, variables, levels } = slicedGrib;
+      let gribDetail = null;
+      const gribStream = fs.createReadStream(filePath);
+      const gribUuid = uuidv4();
+      try {
+        const {
+          writeStream: gribWriteStream,
+          uploadPromise: gribUploadPromise,
+        } = uploadStreamToS3(
+          `${model}/${currentYear}/${currentMonth}/${currentDate}/forecast/${variables.join(
+            '-',
+          )}/gribfile/${gribUuid}.grib2`,
+          slicedBucket,
+        );
+        gribStream.on('open', function () {
+          gribStream.pipe(gribWriteStream);
+        });
+        gribDetail = await gribUploadPromise;
+      } catch (error) {
+        logger.error(`Error uploading grib: ${error.message}`);
+      }
+
+      fs.unlink(filePath, () => {
+        logger.info(`sliced grib of model ${model}-${id} has been deleted`);
+      });
+      return {
+        id: gribUuid,
+        s3Key: gribDetail ? gribDetail.Key : null,
+        variables,
+        levels,
+      };
+    }),
+  );
+
+  // End of Smaller grib upload process
+
+  // GeoJSON stream to s3
+  logger.info(
+    `Uploading jsons from processing ${id}. ${JSON.stringify(geoJsons)}`,
+  );
+  const jsonFiles = await Promise.all(
+    geoJsons
+      .filter((json) => {
+        const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
+        const jsonStartTime = `${json.time}+00`;
+        const jsonStartTimeUnix = Date.parse(jsonStartTime);
+        const jsonEndTimeUnix = new Date(
+          jsonStartTimeUnix + endTimeModifier,
+        ).getTime();
+
+        if (startTime <= jsonEndTimeUnix && endTime >= jsonStartTimeUnix) {
+          return true;
+        }
+        return false;
+      })
+      .map(async (json) => {
+        try {
+          const uuid = uuidv4();
+          const { variables, time, level, filePath } = json;
+          const gsLevels = [level];
+          const gsTimes = [`${time}+00`];
+
+          const { writeStream, uploadPromise } = uploadStreamToS3(
+            `${model}/${currentYear}/${currentMonth}/${currentDate}/forecast/${variables.join(
+              '-',
+            )}/geojson/${uuid}.json`,
+            slicedBucket,
+          );
+          const readStream = fs.createReadStream(filePath);
+          readStream.pipe(writeStream);
+          const jsonDetail = await uploadPromise;
+          // TODO: Delete jsons file
+
+          const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
+          const startTime = gsTimes[0];
+          const startTimeInUnix = Date.parse(startTime);
+          const endTime = new Date(startTimeInUnix + endTimeModifier);
+
+          return {
+            uuid,
+            startTime: `${time}+00`,
+            endTime: endTime.toISOString(),
+            key: jsonDetail.Key,
+            levels: gsLevels,
+            runtimes: gsTimes,
+            variables: Array.from(gsVariables),
+          };
+        } catch (error) {
+          logger.error(`Error uploading geojson: ${error.message}`);
+          return null;
+        }
+      }),
+  );
+  // End of geojson stream to s3
+  // Saving to DB
+  const successJsons = jsonFiles.filter((row) => row !== null);
+  const arrayData = [
+    ...gribFiles
+      .filter((row) => {
+        return row.s3Key !== null;
+      })
+      .map((row) => {
+        return {
+          id: row.id,
+          model,
+          startTime: start_time,
+          endTime: end_time,
+          s3Key: row.s3Key,
+          fileType: 'GRIB',
+          boundingBox: bboxPolygon.geometry,
+          levels: row.levels,
+          variables: row.variables,
+          runtimes,
+          competitionUnitId: raceID,
+        };
+      }),
+    ...successJsons.map((row) => {
+      return {
+        id: row.uuid,
+        model,
+        startTime: row.startTime,
+        endTime: row.endTime,
+        s3Key: row.key,
+        fileType: 'JSON',
+        boundingBox: bboxPolygon.geometry,
+        levels: row.levels,
+        variables: row.variables,
+        runtimes: row.runtimes,
+        competitionUnitId: raceID,
+      };
+    }),
+  ];
+  try {
+    await mainDB.slicedWeather.bulkCreate(arrayData, {
+      ignoreDuplicates: true,
+      validate: true,
+    });
+  } catch (error) {
+    logger.error(`Error saving metadata to DB: ${error.message}`);
+  }
+  return successJsons.map((row) => {
+    return {
+      key: row.key,
+      model,
+      levels: row.levels,
+      variables: row.variables,
+      runtimes: row.runtimes,
+    };
+  });
+}
+
 async function getArchivedData(bbox, startTime, endTime, raceID) {
   const bboxPolygon = turf.bboxPolygon(bbox);
   const files = await getWeatherFilesByRegion(bboxPolygon, startTime, endTime);
 
-  const activeDownloadList = new Map();
-  const data = await Promise.all(
-    files.map(async (row) => {
-      while (activeDownloadList.size >= 10) {
-        logger.info('More than 10 files are in active download!');
-        await new Promise((resolve) => {
-          setTimeout(resolve, 10000);
-        });
-      }
-      const { id, model, start_time, end_time, grib_file_url } = row;
-      activeDownloadList.set(id, 'processing');
-      const downloadPath = path.resolve(
-        __dirname,
-        `../../operating_folder/${id}.grib2`,
-      );
-      try {
-        await downloadFromS3(bucketName, grib_file_url, downloadPath);
-      } catch (error) {
-        logger.error(`Error downloading grib: ${error.message}`);
-        return [];
-      }
-      activeDownloadList.delete(id);
-
-      const currentTime = new Date();
-      const currentYear = String(currentTime.getUTCFullYear());
-      const currentMonth = String(currentTime.getUTCMonth() + 1).padStart(
-        2,
-        '0',
-      );
-      const currentDate = String(currentTime.getUTCDate()).padStart(2, '0');
-
-      if (!fs.existsSync(downloadPath)) {
-        logger.error(
-          `Download didn't fail, but file doesn't exist at download path. ID: ${id}, timestamp: ${currentTime.toISOString()}`,
-        );
-        return [];
-      }
-      const { slicedGribs, geoJsons, runtimes } = sliceGribByRegion(
-        bbox,
-        downloadPath,
-        {
-          folder: path.resolve(__dirname, `../../operating_folder/`),
-          fileID: id,
-          model,
-        },
-      );
-      // Gribs upload process
-      const gribFiles = await Promise.all(
-        slicedGribs.map(async (slicedGrib) => {
-          const { filePath, variables, levels } = slicedGrib;
-          let gribDetail = null;
-          const gribStream = fs.createReadStream(filePath);
-          const gribUuid = uuidv4();
-          try {
-            const {
-              writeStream: gribWriteStream,
-              uploadPromise: gribUploadPromise,
-            } = uploadStreamToS3(
-              `${model}/${currentYear}/${currentMonth}/${currentDate}/forecast/${variables.join(
-                '-',
-              )}/gribfile/${gribUuid}.grib2`,
-              slicedBucket,
-            );
-            gribStream.on('open', function () {
-              gribStream.pipe(gribWriteStream);
-            });
-            gribDetail = await gribUploadPromise;
-          } catch (error) {
-            logger.error(`Error uploading grib: ${error.message}`);
-          }
-
-          fs.unlink(filePath, () => {
-            logger.info(`sliced grib of model ${model}-${id} has been deleted`);
-          });
-          return {
-            id: gribUuid,
-            s3Key: gribDetail ? gribDetail.Key : null,
-            variables,
-            levels,
-          };
-        }),
-      );
-
-      // End of Smaller grib upload process
-
-      // GeoJSON stream to s3
-      const jsonFiles = await Promise.all(
-        geoJsons
-          .filter((json) => {
-            const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
-            const jsonStartTime = `${json.properties.time}+00`;
-            const jsonStartTimeUnix = Date.parse(jsonStartTime);
-            const jsonEndTimeUnix = new Date(
-              jsonStartTimeUnix + endTimeModifier,
-            ).getTime();
-
-            if (startTime <= jsonEndTimeUnix && endTime >= jsonStartTimeUnix) {
-              return true;
-            }
-            return false;
-          })
-          .map(async (json) => {
-            try {
-              const uuid = uuidv4();
-
-              const gsVariables = new Set();
-              const gsLevels = [json.properties.level];
-              const gsTimes = [`${json.properties.time}+00`];
-              if (json.features[0]) {
-                for (const variable in json.features[0].properties) {
-                  gsVariables.add(variable);
-                }
-              }
-              const variables = Array.from(gsVariables);
-
-              const { writeStream, uploadPromise } = uploadStreamToS3(
-                `${model}/${currentYear}/${currentMonth}/${currentDate}/forecast/${variables.join(
-                  '-',
-                )}/geojson/${uuid}.json`,
-                slicedBucket,
-              );
-              const readable = Readable.from([JSON.stringify(json)]);
-              readable.pipe(writeStream);
-              const jsonDetail = await uploadPromise;
-
-              const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
-              const startTime = gsTimes[0];
-              const startTimeInUnix = Date.parse(startTime);
-              const endTime = new Date(startTimeInUnix + endTimeModifier);
-
-              return {
-                uuid,
-                startTime: `${json.properties.time}+00`,
-                endTime: endTime.toISOString(),
-                key: jsonDetail.Key,
-                levels: gsLevels,
-                runtimes: gsTimes,
-                variables: Array.from(gsVariables),
-              };
-            } catch (error) {
-              logger.error(`Error uploading geojson: ${error.message}`);
-              return null;
-            }
-          }),
-      );
-      // End of geojson stream to s3
-      // Saving to DB
-      const successJsons = jsonFiles.filter((row) => row !== null);
-      const arrayData = [
-        ...gribFiles
-          .filter((row) => {
-            return row.s3Key !== null;
-          })
-          .map((row) => {
-            return {
-              id: row.id,
-              model,
-              startTime: start_time,
-              endTime: end_time,
-              s3Key: row.s3Key,
-              fileType: 'GRIB',
-              boundingBox: bboxPolygon.geometry,
-              levels: row.levels,
-              variables: row.variables,
-              runtimes,
-              competitionUnitId: raceID,
-            };
-          }),
-        ...successJsons.map((row) => {
-          return {
-            id: row.uuid,
-            model,
-            startTime: row.startTime,
-            endTime: row.endTime,
-            s3Key: row.key,
-            fileType: 'JSON',
-            boundingBox: bboxPolygon.geometry,
-            levels: row.levels,
-            variables: row.variables,
-            runtimes: row.runtimes,
-            competitionUnitId: raceID,
-          };
-        }),
-      ];
-      try {
-        await mainDB.slicedWeather.bulkCreate(arrayData, {
-          ignoreDuplicates: true,
-          validate: true,
-        });
-      } catch (error) {
-        logger.error(`Error saving metadata to DB: ${error.message}`);
-      }
-      return successJsons.map((row) => {
-        return {
-          key: row.key,
-          model,
-          levels: row.levels,
-          variables: row.variables,
-          runtimes: row.runtimes,
-        };
-      });
-    }),
-  );
-
-  return data.flat();
+  const queue = new Queue({
+    maxConcurrentProcess: 1,
+    processFunction,
+  });
+  files.forEach((row) => {
+    queue.enqueue({ ...row, bbox, startTime, endTime, raceID });
+  });
 }
 
 module.exports = getArchivedData;

@@ -1,7 +1,6 @@
 function parseCsvData(csvData) {
-  const lines = csvData.split('\n');
   const data = [];
-  lines.forEach((line) => {
+  csvData.split('\n').forEach((line) => {
     const lineComponents = line.split(',');
     if (lineComponents.length == 7) {
       data.push({

@@ -1,45 +1,14 @@
 const fs = require('fs');
-const execSync = require('child_process').execSync;
+const { promisify } = require('util');
+const execPromise = promisify(require('child_process').exec);
+const readFile = promisify(fs.readFile);
 
 const parseCsvData = require('./parseCsvData');
 const makeGeoJsons = require('./makeGeoJsons');
+const csvToGeoJson = require('./csvToGeoJson');
 const logger = require('../logger');
 
-const INCLUDED_LEVELS = {
-  ARPEGE_WORLD: [
-    // 'mean sea level',
-    '10 m above ground',
-    // '2 m above ground', // Contains TMP & RH for 2 m above ground, ignoring
-    // 'atmos col',
-    'surface',
-  ],
-  // GFS: ['10 m above ground', '40 m above ground'],
-  RTOFS_GLOBAL: ['0 m below sea level'],
-  // Regionals
-  AROME_FRANCE: [
-    // 'mean sea level',
-    '10 m above ground',
-    // '2 m above ground',
-    // 'atmos col',
-    'surface',
-  ],
-  AROME_FRANCE_HD: [
-    '10 m above ground',
-    // '2 m above ground'
-  ],
-  ARPEGE_EUROPE: [
-    // 'mean sea level',
-    '10 m above ground',
-    // '2 m above ground',
-    // 'atmos col',
-    'surface',
-  ],
-  RTOFS_FORECAST_WESTERN_CONUS: ['0 m below sea level'],
-  RTOFS_FORECAST_WESTERN_ATLANTIC: ['0 m below sea level'],
-  HRRR_SUB_HOURLY: ['10 m above ground', 'surface'],
-};
-
-function sliceGribByRegion(bbox, filename, options) {
+async function sliceGribByRegion(bbox, filename, options) {
   let { fileID, folder, model } = options;
   // Need to round up and down values, so that bounding box doesn't become too small
   // https://www.cpc.ncep.noaa.gov/products/wesley/wgrib2/small_grib.html
@@ -49,144 +18,152 @@ function sliceGribByRegion(bbox, filename, options) {
   const topLat = Math.ceil(bbox[3]);
 
   try {
-    execSync(
+    await execPromise(
       `wgrib2 ${filename} -small_grib ${leftLon}:${rightLon} ${bottomLat}:${topLat} ${folder}/small_${fileID}.grib2`,
     );
-    execSync(
+    await execPromise(
       `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
     );
+    const used1 = process.memoryUsage().heapUsed / 1024 / 1024;
+    console.log(
+      `The script uses 1 approximately ${Math.round(used1 * 100) / 100} MB`,
+    );
     fs.unlinkSync(filename);
-    const csvData = fs.readFileSync(`${folder}/${fileID}.csv`, 'utf-8');
+
+    const { runtimes, variables, variablesToLevel, geoJsons } =
+      await csvToGeoJson(
+        fileID,
+        model,
+        await readFile(`${folder}/${fileID}.csv`, 'utf-8'),
+      );
+    const used2 = process.memoryUsage().heapUsed / 1024 / 1024;
+    console.log(
+      `The script uses 2 approximately ${Math.round(used2 * 100) / 100} MB`,
+    );
     fs.unlinkSync(`${folder}/${fileID}.csv`);
-    const parsedData = parseCsvData(csvData);
-    const geoJsons = makeGeoJsons(parsedData);
+    const used3 = process.memoryUsage().heapUsed / 1024 / 1024;
+    console.log(
+      `The script uses 3 approximately ${Math.round(used3 * 100) / 100} MB`,
+    );
+    // const geoJsons = makeGeoJsons(parsedData);
+    const used4 = process.memoryUsage().heapUsed / 1024 / 1024;
+    console.log(
+      `The script uses 4 approximately ${Math.round(used4 * 100) / 100} MB`,
+    );
 
-    const levels = new Set();
-    const runtimes = new Set();
-    const variables = new Set();
-    const variablesToLevel = new Map();
-
-    const finalResult = geoJsons.filter((geoJson) => {
-      levels.add(geoJson.properties.level);
-      runtimes.add(`${geoJson.properties.time}+00`);
-      for (const variable in geoJson.features[0].properties) {
-        variables.add(variable);
-        const existingVTL = variablesToLevel.get(variable) || [];
-        if (
-          existingVTL.indexOf(geoJson.properties.level) === -1 &&
-          ((INCLUDED_LEVELS[model] &&
-            INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1) ||
-            !INCLUDED_LEVELS[model])
-        ) {
-          variablesToLevel.set(variable, [
-            ...existingVTL,
-            geoJson.properties.level,
-          ]);
-        }
-      }
-
-      if (INCLUDED_LEVELS[model]) {
-        return INCLUDED_LEVELS[model].indexOf(geoJson.properties.level) !== -1;
-      }
-      return true; // Non-defined models are now all included (ERA5 files support)
-    });
-
+    const used5 = process.memoryUsage().heapUsed / 1024 / 1024;
+    console.log(
+      `The script uses 5 approximately ${Math.round(used5 * 100) / 100} MB`,
+    );
     let slicedGribs = [];
-    variables.forEach((variable) => {
-      const levelsAvailable = variablesToLevel.get(variable);
-      if (levelsAvailable && levelsAvailable.length > 0) {
-        let varLevels = Array.from(levelsAvailable).join('|');
-        switch (variable) {
-          case 'UGRD':
-            levelsAvailable.forEach((level) => {
-              execSync(
-                `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UGRD|VGRD):(${level}):" -grib_out ${folder}/${fileID}_uvgrd_${level.replace(
-                  / /g,
-                  '_',
-                )}.grib2`,
+    await Promise.all(
+      Array.from(variables).map(async (variable) => {
+        const levelsAvailable = variablesToLevel.get(variable);
+        if (levelsAvailable && levelsAvailable.length > 0) {
+          let varLevels = Array.from(levelsAvailable).join('|');
+          switch (variable) {
+            case 'UGRD':
+              await Promise.all(
+                levelsAvailable.map(async (level) => {
+                  await execPromise(
+                    `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UGRD|VGRD):(${level}):" -grib_out ${folder}/${fileID}_uvgrd_${level.replace(
+                      / /g,
+                      '_',
+                    )}.grib2`,
+                  );
+                  slicedGribs.push({
+                    filePath: `${folder}/${fileID}_uvgrd_${level.replace(
+                      / /g,
+                      '_',
+                    )}.grib2`,
+                    variables: ['UGRD', 'VGRD'],
+                    levels: [level],
+                  });
+                }),
               );
-              slicedGribs.push({
-                filePath: `${folder}/${fileID}_uvgrd_${level.replace(
-                  / /g,
-                  '_',
-                )}.grib2`,
-                variables: ['UGRD', 'VGRD'],
-                levels: [level],
-              });
-            });
-            break;
-          case 'UOGRD':
-            levelsAvailable.forEach((level) => {
-              execSync(
-                `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UOGRD|VOGRD):(${varLevels}):" -grib_out ${folder}/${fileID}_uvogrd_${level.replace(
-                  / /g,
-                  '_',
-                )}.grib2`,
+              break;
+            case 'UOGRD':
+              await Promise.all(
+                levelsAvailable.map(async (level) => {
+                  await execPromise(
+                    `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UOGRD|VOGRD):(${varLevels}):" -grib_out ${folder}/${fileID}_uvogrd_${level.replace(
+                      / /g,
+                      '_',
+                    )}.grib2`,
+                  );
+                  slicedGribs.push({
+                    filePath: `${folder}/${fileID}_uvogrd_${level.replace(
+                      / /g,
+                      '_',
+                    )}.grib2`,
+                    variables: ['UOGRD', 'VOGRD'],
+                    levels: [level],
+                  });
+                }),
               );
-              slicedGribs.push({
-                filePath: `${folder}/${fileID}_uvogrd_${level.replace(
-                  / /g,
-                  '_',
-                )}.grib2`,
-                variables: ['UOGRD', 'VOGRD'],
-                levels: [level],
-              });
-            });
-            break;
-          case 'UGUST':
-            levelsAvailable.forEach((level) => {
-              execSync(
-                `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UGUST|VGUST):(${varLevels}):" -grib_out ${folder}/${fileID}_uvgust_${level.replace(
-                  / /g,
-                  '_',
-                )}.grib2`,
+              break;
+            case 'UGUST':
+              await Promise.all(
+                levelsAvailable.map(async (level) => {
+                  await execPromise(
+                    `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(UGUST|VGUST):(${varLevels}):" -grib_out ${folder}/${fileID}_uvgust_${level.replace(
+                      / /g,
+                      '_',
+                    )}.grib2`,
+                  );
+                  slicedGribs.push({
+                    filePath: `${folder}/${fileID}_uvgust_${level.replace(
+                      / /g,
+                      '_',
+                    )}.grib2`,
+                    variables: ['UGUST', 'VGUST'],
+                    levels: [level],
+                  });
+                }),
               );
-              slicedGribs.push({
-                filePath: `${folder}/${fileID}_uvgust_${level.replace(
-                  / /g,
-                  '_',
-                )}.grib2`,
-                variables: ['UGUST', 'VGUST'],
-                levels: [level],
-              });
-            });
-            break;
-          case 'VGRD':
-          case 'VOGRD':
-          case 'VGUST':
-            // Ignore these 3, combined with their u-couterpart
-            break;
-          default:
-            levelsAvailable.forEach((level) => {
-              execSync(
-                `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(${variable}):(${varLevels}):" -grib_out ${folder}/${fileID}_${variable}_${level.replace(
-                  / /g,
-                  '_',
-                )}.grib2`,
+              break;
+            case 'VGRD':
+            case 'VOGRD':
+            case 'VGUST':
+              // Ignore these 3, combined with their u-couterpart
+              break;
+            default:
+              await Promise.all(
+                levelsAvailable.map(async (level) => {
+                  await execPromise(
+                    `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(${variable}):(${varLevels}):" -grib_out ${folder}/${fileID}_${variable}_${level.replace(
+                      / /g,
+                      '_',
+                    )}.grib2`,
+                  );
+                  slicedGribs.push({
+                    filePath: `${folder}/${fileID}_${variable}_${level.replace(
+                      / /g,
+                      '_',
+                    )}.grib2`,
+                    variables: [variable],
+                    levels: [level],
+                  });
+                }),
               );
-              slicedGribs.push({
-                filePath: `${folder}/${fileID}_${variable}_${level.replace(
-                  / /g,
-                  '_',
-                )}.grib2`,
-                variables: [variable],
-                levels: [level],
-              });
-            });
-
-            break;
+              break;
+          }
         }
-      }
-    });
-
+      }),
+    );
+    const used6 = process.memoryUsage().heapUsed / 1024 / 1024;
+    console.log(
+      `The script uses 6 approximately ${Math.round(used6 * 100) / 100} MB`,
+    );
     fs.unlinkSync(`${folder}/small_${fileID}.grib2`);
 
     return {
       slicedGribs,
-      geoJsons: finalResult,
+      geoJsons,
       runtimes: Array.from(runtimes),
     };
   } catch (error) {
+    console.trace(error);
     logger.error(`Error slicing grib by region: ${error.message}`);
     logger.error(error);
     return {
