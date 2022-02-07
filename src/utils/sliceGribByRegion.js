@@ -2,6 +2,7 @@ const fs = require('fs');
 const { promisify } = require('util');
 const execPromise = promisify(require('child_process').exec);
 
+const { INCLUDED_LEVELS } = require('../constants/general');
 const csvToGeoJson = require('./csvToGeoJson');
 const logger = require('../logger');
 
@@ -15,8 +16,12 @@ async function sliceGribByRegion(bbox, filename, options) {
   const topLat = Math.ceil(bbox[3]);
 
   try {
+    let matchString = '';
+    if (INCLUDED_LEVELS[model]) {
+      matchString = `-match ":(${INCLUDED_LEVELS[model].join('|')}):"`;
+    }
     await execPromise(
-      `wgrib2 ${filename} -small_grib ${leftLon}:${rightLon} ${bottomLat}:${topLat} ${folder}/small_${fileID}.grib2`,
+      `wgrib2 ${filename} ${matchString} -small_grib ${leftLon}:${rightLon} ${bottomLat}:${topLat} ${folder}/small_${fileID}.grib2`,
     );
     await execPromise(
       `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
@@ -27,8 +32,11 @@ async function sliceGribByRegion(bbox, filename, options) {
     );
     fs.unlinkSync(filename);
 
-    const { runtimes, variables, variablesToLevel, geoJsons } =
-      await csvToGeoJson(fileID, model, `${folder}/${fileID}.csv`);
+    const { runtimes, variablesToLevel, geoJsons } = await csvToGeoJson(
+      fileID,
+      model,
+      `${folder}/${fileID}.csv`,
+    );
     const used2 = process.memoryUsage().heapUsed / 1024 / 1024;
     console.log(
       `The script uses 2 approximately ${Math.round(used2 * 100) / 100} MB`,
@@ -50,12 +58,12 @@ async function sliceGribByRegion(bbox, filename, options) {
     );
     let slicedGribs = [];
     await Promise.all(
-      Array.from(variables).map(async (variable) => {
-        const levelsAvailable = variablesToLevel.get(variable);
+      Array.from(variablesToLevel.keys()).map(async (varGroup) => {
+        const levelsAvailable = variablesToLevel.get(varGroup);
         if (levelsAvailable && levelsAvailable.length > 0) {
           let varLevels = Array.from(levelsAvailable).join('|');
-          switch (variable) {
-            case 'UGRD':
+          switch (varGroup) {
+            case 'uvgrd':
               await Promise.all(
                 levelsAvailable.map(async (level) => {
                   await execPromise(
@@ -75,7 +83,7 @@ async function sliceGribByRegion(bbox, filename, options) {
                 }),
               );
               break;
-            case 'UOGRD':
+            case 'uvogrd':
               await Promise.all(
                 levelsAvailable.map(async (level) => {
                   await execPromise(
@@ -95,7 +103,7 @@ async function sliceGribByRegion(bbox, filename, options) {
                 }),
               );
               break;
-            case 'UGUST':
+            case 'uvgust':
               await Promise.all(
                 levelsAvailable.map(async (level) => {
                   await execPromise(
@@ -115,26 +123,21 @@ async function sliceGribByRegion(bbox, filename, options) {
                 }),
               );
               break;
-            case 'VGRD':
-            case 'VOGRD':
-            case 'VGUST':
-              // Ignore these 3, combined with their u-couterpart
-              break;
             default:
               await Promise.all(
                 levelsAvailable.map(async (level) => {
                   await execPromise(
-                    `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(${variable}):(${varLevels}):" -grib_out ${folder}/${fileID}_${variable}_${level.replace(
+                    `wgrib2 ${folder}/small_${fileID}.grib2 -match ":(${varGroup}):(${varLevels}):" -grib_out ${folder}/${fileID}_${varGroup}_${level.replace(
                       / /g,
                       '_',
                     )}.grib2`,
                   );
                   slicedGribs.push({
-                    filePath: `${folder}/${fileID}_${variable}_${level.replace(
+                    filePath: `${folder}/${fileID}_${varGroup}_${level.replace(
                       / /g,
                       '_',
                     )}.grib2`,
-                    variables: [variable],
+                    variables: [varGroup],
                     levels: [level],
                   });
                 }),

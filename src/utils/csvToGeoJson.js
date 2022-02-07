@@ -6,46 +6,13 @@ const path = require('path');
 const readFile = promisify(fs.readFile);
 const writeFile = promisify(fs.writeFile);
 
-const INCLUDED_LEVELS = {
-  ARPEGE_WORLD: [
-    'mean sea level',
-    '10 m above ground',
-    // '2 m above ground', // Contains TMP & RH for 2 m above ground, ignoring
-    // 'atmos col',
-    'surface',
-  ],
-  // GFS: ['10 m above ground', '40 m above ground'],
-  RTOFS_GLOBAL: ['0 m below sea level'],
-  // Regionals
-  AROME_FRANCE: [
-    // 'mean sea level',
-    '10 m above ground',
-    // '2 m above ground',
-    // 'atmos col',
-    'surface',
-  ],
-  AROME_FRANCE_HD: [
-    '10 m above ground',
-    // '2 m above ground'
-  ],
-  ARPEGE_EUROPE: [
-    // 'mean sea level',
-    '10 m above ground',
-    // '2 m above ground',
-    // 'atmos col',
-    'surface',
-  ],
-  RTOFS_FORECAST_WESTERN_CONUS: ['0 m below sea level'],
-  RTOFS_FORECAST_WESTERN_ATLANTIC: ['0 m below sea level'],
-  HRRR_SUB_HOURLY: ['10 m above ground', 'surface'],
-};
+const { INCLUDED_LEVELS } = require('../constants/general');
 
 async function csvToGeoJson(id, model, csvFilePath) {
   const csvData = await readFile(csvFilePath, 'utf-8');
   const operatingPath = path.resolve(__dirname, `../../operating_folder`);
   const varTotimeToLevelToPoints = {};
   const runtimes = new Set();
-  const variables = new Set();
   const variablesToLevel = new Map();
 
   csvData.split('\n').forEach((line) => {
@@ -63,7 +30,6 @@ async function csvToGeoJson(id, model, csvFilePath) {
         const pointHash = `${lon}${lat}`;
         variable = variable.replace(/"/gm, '');
         runtimes.add(`${time}+00`);
-        variables.add(variable);
         let varGroup = '';
         switch (variable) {
           case 'UGRD':
@@ -180,7 +146,6 @@ async function csvToGeoJson(id, model, csvFilePath) {
   console.log('geoJsons length', geoJsons.length);
   return {
     runtimes,
-    variables,
     variablesToLevel,
     geoJsons,
   };
