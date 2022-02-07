@@ -76,10 +76,9 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const startDate = new Date(startTime);
   const endDate = new Date(endTime);
   const files = await db.weatherData.findAll({
-    limit: 2, //TODO: Remove limit after testing
+    limit: 3, //TODO: Remove limit after testing
     where: {
-      // model: { [Op.in]: modelsToFetch },
-      model: 'ARPEGE_WORLD',
+      model: { [Op.in]: modelsToFetch },
       [Op.or]: [
         {
           start_time: {
