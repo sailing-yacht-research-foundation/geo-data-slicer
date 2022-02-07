@@ -1,7 +1,6 @@
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
-const { Readable } = require('stream');
 const turf = require('@turf/turf');
 
 const db = require('../models');
@@ -12,6 +11,7 @@ const uploadStreamToS3 = require('../utils/uploadStreamToS3');
 const logger = require('../logger');
 const { VALID_TIMEFRAME } = require('../configs/sourceModel.config');
 const Queue = require('../classes/Queue');
+const { MAX_AREA_CONCURRENT_RUN } = require('../configs/general.config');
 
 const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
@@ -113,8 +113,8 @@ async function processFunction(data) {
     end_time,
     grib_file_url,
     bbox,
-    startTime,
-    endTime,
+    searchStartTime,
+    searchEndTime,
     raceID,
   } = data;
   logger.info(`Processing ${model} - ${id}`);
@@ -147,10 +147,10 @@ async function processFunction(data) {
       folder: path.resolve(__dirname, `../../operating_folder/`),
       fileID: id,
       model,
+      searchStartTime,
+      searchEndTime,
     },
   );
-  const used = process.memoryUsage().heapUsed / 1024 / 1024;
-  console.log(`S script uses approximately ${Math.round(used * 100) / 100} MB`);
   // Gribs upload process
   logger.info(`Uploading gribs from processing ${id}`);
   const gribFiles = await Promise.all(
@@ -192,9 +192,7 @@ async function processFunction(data) {
   // End of Smaller grib upload process
 
   // GeoJSON stream to s3
-  logger.info(
-    `Uploading jsons from processing ${id}. ${JSON.stringify(geoJsons)}`,
-  );
+  logger.info(`Uploading jsons from processing ${id}.`);
   const jsonFiles = await Promise.all(
     geoJsons
       .filter((json) => {
@@ -205,7 +203,10 @@ async function processFunction(data) {
           jsonStartTimeUnix + endTimeModifier,
         ).getTime();
 
-        if (startTime <= jsonEndTimeUnix && endTime >= jsonStartTimeUnix) {
+        if (
+          searchStartTime <= jsonEndTimeUnix &&
+          searchEndTime >= jsonStartTimeUnix
+        ) {
           return true;
         }
         return false;
@@ -225,7 +226,9 @@ async function processFunction(data) {
           const readStream = fs.createReadStream(filePath);
           readStream.pipe(writeStream);
           const jsonDetail = await uploadPromise;
-          // TODO: Delete jsons file
+          fs.unlink(filePath, () => {
+            logger.info(`sliced json of model ${model}-${id} has been deleted`);
+          });
 
           const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
           const startTime = gsTimes[0];
@@ -309,13 +312,26 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
   const bboxPolygon = turf.bboxPolygon(bbox);
   const files = await getWeatherFilesByRegion(bboxPolygon, startTime, endTime);
 
+  let maxConcurrentProcess = 3;
+  if (turf.area(turf.bboxPolygon(containerBbox)) > MAX_AREA_CONCURRENT_RUN) {
+    maxConcurrentProcess = 1;
+  }
   const queue = new Queue({
-    maxConcurrentProcess: 1,
+    maxConcurrentProcess,
     processFunction,
   });
   files.forEach((row) => {
-    queue.enqueue({ ...row, bbox, startTime, endTime, raceID });
+    queue.enqueue({
+      ...row,
+      bbox,
+      searchStartTime: startTime,
+      searchEndTime: endTime,
+      raceID,
+    });
   });
+
+  // TODO: Wait queue to finish and return
+  return [];
 }
 
 module.exports = getArchivedData;

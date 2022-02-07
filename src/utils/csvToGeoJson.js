@@ -6,9 +6,15 @@ const path = require('path');
 const readFile = promisify(fs.readFile);
 const writeFile = promisify(fs.writeFile);
 
-const { INCLUDED_LEVELS } = require('../constants/general');
+const { VALID_TIMEFRAME } = require('../configs/sourceModel.config');
 
-async function csvToGeoJson(id, model, csvFilePath) {
+async function csvToGeoJson({
+  id,
+  model,
+  searchStartTime,
+  searchEndTime,
+  csvFilePath,
+}) {
   const csvData = await readFile(csvFilePath, 'utf-8');
   const operatingPath = path.resolve(__dirname, `../../operating_folder`);
   const varTotimeToLevelToPoints = {};
@@ -21,12 +27,18 @@ async function csvToGeoJson(id, model, csvFilePath) {
       let [_refTime, time, variable, level, lon, lat, value] = lineComponents;
       level = level.replace(/"/gm, '');
       time = time.replace(/"/gm, '');
+
+      const endTimeModifier = VALID_TIMEFRAME[model] || 3600000; // Default to 1 hour validity
+      const jsonStartTime = `${time}+00`;
+      const jsonStartTimeUnix = Date.parse(jsonStartTime);
+      const jsonEndTimeUnix = new Date(
+        jsonStartTimeUnix + endTimeModifier,
+      ).getTime();
+
       if (
-        INCLUDED_LEVELS[model] &&
-        INCLUDED_LEVELS[model].indexOf(level) === -1
+        searchStartTime <= jsonEndTimeUnix &&
+        searchEndTime >= jsonStartTimeUnix
       ) {
-        // Skip
-      } else {
         const pointHash = `${lon}${lat}`;
         variable = variable.replace(/"/gm, '');
         runtimes.add(`${time}+00`);
@@ -60,12 +72,7 @@ async function csvToGeoJson(id, model, csvFilePath) {
         if (varTotimeToLevelToPoints[varGroup][time][level] === undefined) {
           varTotimeToLevelToPoints[varGroup][time][level] = {};
           const existingVTL = variablesToLevel.get(varGroup) || [];
-          if (
-            existingVTL.indexOf(level) === -1 &&
-            ((INCLUDED_LEVELS[model] &&
-              INCLUDED_LEVELS[model].indexOf(level) !== -1) ||
-              !INCLUDED_LEVELS[model])
-          ) {
+          if (existingVTL.indexOf(level) === -1) {
             variablesToLevel.set(varGroup, [...existingVTL, level]);
           }
         }
@@ -143,7 +150,6 @@ async function csvToGeoJson(id, model, csvFilePath) {
       }
     }
   }
-  console.log('geoJsons length', geoJsons.length);
   return {
     runtimes,
     variablesToLevel,

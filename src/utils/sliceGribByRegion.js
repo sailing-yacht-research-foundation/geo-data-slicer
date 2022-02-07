@@ -1,13 +1,14 @@
 const fs = require('fs');
 const { promisify } = require('util');
 const execPromise = promisify(require('child_process').exec);
+const deleteFile = promisify(fs.unlink);
 
-const { INCLUDED_LEVELS } = require('../constants/general');
+const { INCLUDED_LEVELS } = require('../configs/sourceModel.config');
 const csvToGeoJson = require('./csvToGeoJson');
 const logger = require('../logger');
 
 async function sliceGribByRegion(bbox, filename, options) {
-  let { fileID, folder, model } = options;
+  let { fileID, folder, model, searchStartTime, searchEndTime } = options;
   // Need to round up and down values, so that bounding box doesn't become too small
   // https://www.cpc.ncep.noaa.gov/products/wesley/wgrib2/small_grib.html
   const leftLon = Math.floor(bbox[0]);
@@ -26,36 +27,16 @@ async function sliceGribByRegion(bbox, filename, options) {
     await execPromise(
       `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
     );
-    const used1 = process.memoryUsage().heapUsed / 1024 / 1024;
-    console.log(
-      `The script uses 1 approximately ${Math.round(used1 * 100) / 100} MB`,
-    );
-    fs.unlinkSync(filename);
+    await deleteFile(filename);
 
-    const { runtimes, variablesToLevel, geoJsons } = await csvToGeoJson(
-      fileID,
+    const { runtimes, variablesToLevel, geoJsons } = await csvToGeoJson({
+      id: fileID,
       model,
-      `${folder}/${fileID}.csv`,
-    );
-    const used2 = process.memoryUsage().heapUsed / 1024 / 1024;
-    console.log(
-      `The script uses 2 approximately ${Math.round(used2 * 100) / 100} MB`,
-    );
-    fs.unlinkSync(`${folder}/${fileID}.csv`);
-    const used3 = process.memoryUsage().heapUsed / 1024 / 1024;
-    console.log(
-      `The script uses 3 approximately ${Math.round(used3 * 100) / 100} MB`,
-    );
-    // const geoJsons = makeGeoJsons(parsedData);
-    const used4 = process.memoryUsage().heapUsed / 1024 / 1024;
-    console.log(
-      `The script uses 4 approximately ${Math.round(used4 * 100) / 100} MB`,
-    );
-
-    const used5 = process.memoryUsage().heapUsed / 1024 / 1024;
-    console.log(
-      `The script uses 5 approximately ${Math.round(used5 * 100) / 100} MB`,
-    );
+      searchStartTime,
+      searchEndTime,
+      csvFilePath: `${folder}/${fileID}.csv`,
+    });
+    await deleteFile(`${folder}/${fileID}.csv`);
     let slicedGribs = [];
     await Promise.all(
       Array.from(variablesToLevel.keys()).map(async (varGroup) => {
@@ -147,10 +128,6 @@ async function sliceGribByRegion(bbox, filename, options) {
         }
       }),
     );
-    const used6 = process.memoryUsage().heapUsed / 1024 / 1024;
-    console.log(
-      `The script uses 6 approximately ${Math.round(used6 * 100) / 100} MB`,
-    );
     fs.unlinkSync(`${folder}/small_${fileID}.grib2`);
 
     return {
@@ -161,7 +138,6 @@ async function sliceGribByRegion(bbox, filename, options) {
   } catch (error) {
     console.trace(error);
     logger.error(`Error slicing grib by region: ${error.message}`);
-    logger.error(error);
     return {
       slicedGribs: [],
       geoJsons: [],

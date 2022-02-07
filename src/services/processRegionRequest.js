@@ -12,6 +12,7 @@ const createShipReport = require('./createShipReport');
 const createWindfinderWind = require('./createWindfinderWind');
 const createNoaaBuoyWind = require('./createNoaaBuoyWind');
 const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
+const { MAX_AREA_CONCURRENT_RUN } = require('../configs/general.config');
 const logger = require('../logger');
 
 async function processRegionRequest(
@@ -40,7 +41,7 @@ async function processRegionRequest(
   let shipReportPromise = null;
   let windfinderPromise = null;
   let noaaBuoyPromise = null;
-  if (turf.area(turf.bboxPolygon(containerBbox)) > 10000000000) {
+  if (turf.area(turf.bboxPolygon(containerBbox)) > MAX_AREA_CONCURRENT_RUN) {
     // Larger than 100x100km area
     windfinderPromise = new Promise(() => {
       setTimeout(() => {
@@ -99,24 +100,24 @@ async function processRegionRequest(
     turf.bboxPolygon(containerBbox),
   );
 
-  // if (webhook) {
-  //   try {
-  //     await axios({
-  //       url: webhook,
-  //       method: 'POST',
-  //       data: {
-  //         raceID,
-  //         token: webhookToken,
-  //         archivedData,
-  //         shipReports,
-  //         windfinderWinds,
-  //         noaaBuoyWinds,
-  //       },
-  //     });
-  //   } catch (error) {
-  //     logger.error(`Failed to send data to webhook. Error: ${error.message}`);
-  //   }
-  // }
+  if (webhook) {
+    try {
+      await axios({
+        url: webhook,
+        method: 'POST',
+        data: {
+          raceID,
+          token: webhookToken,
+          archivedData,
+          shipReports,
+          windfinderWinds,
+          noaaBuoyWinds,
+        },
+      });
+    } catch (error) {
+      logger.error(`Failed to send data to webhook. Error: ${error.message}`);
+    }
+  }
 }
 
 module.exports = processRegionRequest;

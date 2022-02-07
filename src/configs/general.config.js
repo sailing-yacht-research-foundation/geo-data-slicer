@@ -1,0 +1,5 @@
+const MAX_AREA_CONCURRENT_RUN = 10000000000;
+
+module.exports = {
+  MAX_AREA_CONCURRENT_RUN,
+};

@@ -2,7 +2,6 @@ const logger = require('../logger');
 
 class Queue {
   constructor(params) {
-    console.log(params);
     this.elements = [];
     this.results = [];
     this.maxConcurrentProcess = params.maxConcurrentProcess;
