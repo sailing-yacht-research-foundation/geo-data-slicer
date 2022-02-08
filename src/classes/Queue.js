@@ -53,8 +53,7 @@ class Queue {
       let timerId = setInterval(() => {
         if (this.currentProcessing === 0 && this.elements.length === 0) {
           clearInterval(timerId);
-          resolve(this.results);
-          // TODO: cleanup this.results once sent to user
+          resolve(this.results.flat());
         }
       }, 5000);
     });

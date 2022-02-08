@@ -76,7 +76,7 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const startDate = new Date(startTime);
   const endDate = new Date(endTime);
   const files = await db.weatherData.findAll({
-    limit: 3, //TODO: Remove limit after testing
+    // limit: 3, //TODO: Remove limit after testing
     where: {
       model: { [Op.in]: modelsToFetch },
       [Op.or]: [
@@ -211,11 +211,16 @@ async function processFunction(data) {
         return false;
       })
       .map(async (json) => {
-        try {
-          const uuid = uuidv4();
-          const { variables, time, level, filePath } = json;
-          const gsTimes = [`${time}+00`];
+        const uuid = uuidv4();
+        const { variables, time, level, filePath } = json;
+        const gsTimes = [`${time}+00`];
 
+        const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
+        const startTime = gsTimes[0];
+        const startTimeInUnix = Date.parse(startTime);
+        const endTime = new Date(startTimeInUnix + endTimeModifier);
+        let jsonDetail = null;
+        try {
           const { writeStream, uploadPromise } = uploadStreamToS3(
             `${model}/${currentYear}/${currentMonth}/${currentDate}/forecast/${variables.join(
               '-',
@@ -224,29 +229,24 @@ async function processFunction(data) {
           );
           const readStream = fs.createReadStream(filePath);
           readStream.pipe(writeStream);
-          const jsonDetail = await uploadPromise;
-          fs.unlink(filePath, () => {
-            logger.info(`sliced json of model ${model}-${id} has been deleted`);
-          });
-
-          const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
-          const startTime = gsTimes[0];
-          const startTimeInUnix = Date.parse(startTime);
-          const endTime = new Date(startTimeInUnix + endTimeModifier);
-
-          return {
-            uuid,
-            startTime: startTimeInUnix,
-            endTime: endTime.toISOString(),
-            key: jsonDetail.Key,
-            levels: [level],
-            runtimes: gsTimes,
-            variables,
-          };
+          jsonDetail = await uploadPromise;
         } catch (error) {
           logger.error(`Error uploading geojson: ${error.message}`);
-          return null;
         }
+
+        fs.unlink(filePath, () => {
+          logger.info(`sliced json of model ${model}-${id} has been deleted`);
+        });
+
+        return {
+          uuid,
+          startTime: startTimeInUnix,
+          endTime: endTime.toISOString(),
+          s3Key: jsonDetail?.Key,
+          levels: [level],
+          runtimes: gsTimes,
+          variables,
+        };
       }),
   );
   // End of geojson stream to s3
@@ -272,21 +272,25 @@ async function processFunction(data) {
           competitionUnitId: raceID,
         };
       }),
-    ...successJsons.map((row) => {
-      return {
-        id: row.uuid,
-        model,
-        startTime: row.startTime,
-        endTime: row.endTime,
-        s3Key: row.key,
-        fileType: 'JSON',
-        boundingBox: bboxPolygon.geometry,
-        levels: row.levels,
-        variables: row.variables,
-        runtimes: row.runtimes,
-        competitionUnitId: raceID,
-      };
-    }),
+    ...successJsons
+      .filter((row) => {
+        return row.s3Key !== null;
+      })
+      .map((row) => {
+        return {
+          id: row.uuid,
+          model,
+          startTime: row.startTime,
+          endTime: row.endTime,
+          s3Key: row.s3Key,
+          fileType: 'JSON',
+          boundingBox: bboxPolygon.geometry,
+          levels: row.levels,
+          variables: row.variables,
+          runtimes: row.runtimes,
+          competitionUnitId: raceID,
+        };
+      }),
   ];
   try {
     await mainDB.slicedWeather.bulkCreate(arrayData, {
@@ -332,8 +336,8 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
     }),
   );
 
-  // TODO: Wait queue to finish and return
-  return [];
+  const results = await queue.waitFinish();
+  return results;
 }
 
 module.exports = getArchivedData;
