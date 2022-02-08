@@ -4,7 +4,7 @@
   "description": "Grab some geo data.",
   "main": "src/main.js",
   "scripts": {
-    "dev": "nodemon --max_old_space_size=4096 -L src/main.js",
+    "dev": "nodemon -L src/main.js",
     "start": "node src/main.js",
     "start:pm2": "pm2-runtime src/main.js",
     "test": "jest --coverage --runInBand"
