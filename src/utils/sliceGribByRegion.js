@@ -28,7 +28,6 @@ async function sliceGribByRegion(bbox, filename, options) {
       `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
     );
     await deleteFile(filename);
-
     const { runtimes, variablesToLevel, geoJsons } = await csvToGeoJson({
       id: fileID,
       model,
@@ -128,7 +127,7 @@ async function sliceGribByRegion(bbox, filename, options) {
         }
       }),
     );
-    fs.unlinkSync(`${folder}/small_${fileID}.grib2`);
+    await deleteFile(`${folder}/small_${fileID}.grib2`);
 
     return {
       slicedGribs,
