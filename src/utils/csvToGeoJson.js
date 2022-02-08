@@ -31,9 +31,7 @@ async function csvToGeoJson({
       const endTimeModifier = VALID_TIMEFRAME[model] || 3600000; // Default to 1 hour validity
       const jsonStartTime = `${time}+00`;
       const jsonStartTimeUnix = Date.parse(jsonStartTime);
-      const jsonEndTimeUnix = new Date(
-        jsonStartTimeUnix + endTimeModifier,
-      ).getTime();
+      const jsonEndTimeUnix = jsonStartTimeUnix + endTimeModifier;
 
       if (
         searchStartTime <= jsonEndTimeUnix &&
@@ -125,14 +123,17 @@ async function csvToGeoJson({
           filePath,
           JSON.stringify({
             ...turf.featureCollection(
-              Object.values(
-                varTotimeToLevelToPoints[varGroup][time][level],
-              ).map((p) => {
-                try {
-                  const { lon, lat, ...otherProps } = p;
-                  return turf.point([p.lon, p.lat], otherProps);
-                } catch (err) {}
-              }),
+              Object.values(varTotimeToLevelToPoints[varGroup][time][level])
+                .map((p) => {
+                  try {
+                    const { lon, lat, ...otherProps } = p;
+                    return turf.point([p.lon, p.lat], otherProps);
+                  } catch (err) {
+                    console.log('Error turf point', err);
+                  }
+                  return null;
+                })
+                .filter((row) => row !== null),
             ),
             properties: {
               level: level.replace(/"/gm, ''),

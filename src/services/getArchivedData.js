@@ -198,9 +198,7 @@ async function processFunction(data) {
         const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
         const jsonStartTime = `${json.time}+00`;
         const jsonStartTimeUnix = Date.parse(jsonStartTime);
-        const jsonEndTimeUnix = new Date(
-          jsonStartTimeUnix + endTimeModifier,
-        ).getTime();
+        const jsonEndTimeUnix = jsonStartTimeUnix + endTimeModifier;
 
         if (
           searchStartTime <= jsonEndTimeUnix &&

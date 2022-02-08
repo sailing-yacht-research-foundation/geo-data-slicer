@@ -28,7 +28,7 @@ const createNoaaBuoyWind = async (
   endTimeUnixMS,
   stopOnFirstReport = false,
 ) => {
-  const currentTime = new Date().getTime();
+  const currentTime = Date.now();
   const monthAgo = currentTime - 1000 * 60 * 60 * 24 * 30;
   const startTime = new Date(startTimeUnixMS);
   const endTime = new Date(endTimeUnixMS);

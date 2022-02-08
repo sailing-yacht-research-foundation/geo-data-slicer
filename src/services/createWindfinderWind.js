@@ -144,7 +144,7 @@ async function createWindfinderWind(
   endTimeUnixMS,
   stopOnFirstReport = false,
 ) {
-  const currentTime = new Date().getTime();
+  const currentTime = Date.now();
   const fiveDaysAgo = currentTime - 1000 * 60 * 60 * 24 * 5;
   const startTime = new Date(startTimeUnixMS);
   const endTime = new Date(endTimeUnixMS);
