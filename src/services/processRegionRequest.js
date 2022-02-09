@@ -11,6 +11,8 @@ const getArchivedData = require('./getArchivedData');
 const createShipReport = require('./createShipReport');
 const createWindfinderWind = require('./createWindfinderWind');
 const createNoaaBuoyWind = require('./createNoaaBuoyWind');
+const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
+const { MAX_AREA_CONCURRENT_RUN } = require('../configs/general.config');
 const logger = require('../logger');
 
 async function processRegionRequest(
@@ -36,35 +38,53 @@ async function processRegionRequest(
     raceID,
   );
 
-  const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
-
-  const spots = windfinderIndex
-    .range(
-      containerBbox[0],
-      containerBbox[1],
-      containerBbox[2],
-      containerBbox[3],
-    )
-    .map((id) => windfinderPoints[id]);
-  const windfinderPromise = createWindfinderWind(
-    spots,
-    startTimeUnixMS,
-    endTimeUnixMS,
-  );
-
-  const buoys = noaaBuoyIndex
-    .range(
-      containerBbox[0],
-      containerBbox[1],
-      containerBbox[2],
-      containerBbox[3],
-    )
-    .map((id) => noaaBuoyPoints[id]);
-  const noaaBuoyPromise = createNoaaBuoyWind(
-    buoys,
-    startTimeUnixMS,
-    endTimeUnixMS,
-  );
+  let shipReportPromise = null;
+  let windfinderPromise = null;
+  let noaaBuoyPromise = null;
+  if (turf.area(turf.bboxPolygon(containerBbox)) > MAX_AREA_CONCURRENT_RUN) {
+    windfinderPromise = new Promise(() => {
+      setTimeout(() => {
+        weatherSourceToFeatureCollection([]);
+        return [];
+      }, 1000);
+    });
+    noaaBuoyPromise = new Promise(() => {
+      setTimeout(() => {
+        weatherSourceToFeatureCollection([]);
+        return [];
+      }, 1000);
+    });
+    shipReportPromise = new Promise(() => {
+      setTimeout(() => {
+        weatherSourceToFeatureCollection([]);
+        return [];
+      }, 1000);
+    });
+  } else {
+    shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
+    const spots = windfinderIndex
+      .range(
+        containerBbox[0],
+        containerBbox[1],
+        containerBbox[2],
+        containerBbox[3],
+      )
+      .map((id) => windfinderPoints[id]);
+    windfinderPromise = createWindfinderWind(
+      spots,
+      startTimeUnixMS,
+      endTimeUnixMS,
+    );
+    const buoys = noaaBuoyIndex
+      .range(
+        containerBbox[0],
+        containerBbox[1],
+        containerBbox[2],
+        containerBbox[3],
+      )
+      .map((id) => noaaBuoyPoints[id]);
+    noaaBuoyPromise = createNoaaBuoyWind(buoys, startTimeUnixMS, endTimeUnixMS);
+  }
 
   const [archivedData, shipReportsFull, windfinderWinds, noaaBuoyWinds] =
     await Promise.all([

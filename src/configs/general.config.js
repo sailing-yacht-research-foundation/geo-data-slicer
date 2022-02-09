@@ -1,0 +1,5 @@
+const MAX_AREA_CONCURRENT_RUN = 200000000000; // in m2, 4x4 lonxlat = 197960531766
+
+module.exports = {
+  MAX_AREA_CONCURRENT_RUN,
+};

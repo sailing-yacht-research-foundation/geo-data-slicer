@@ -14,6 +14,7 @@ async function getAvailableStation() {
     {"id":"32069","lat":0.255,"lon":-81.211,"elev":null,"name":"ECUADOR INOCAR - 71 NM West of Pedernales, Ecuador   ","owner":41,"program":7,"status":"E","data":"y","type":"dart"} = Kuning
     Stations with recent data
   */
+  // Based on recent testing, no recent data means it also doesn't have any data at all (404 pages), so keeping this the way it was
   const stationList = {};
   response.data.station.forEach((row) => {
     stationList[row.id] = row.data === 'y';
@@ -27,8 +28,17 @@ const createNoaaBuoyWind = async (
   endTimeUnixMS,
   stopOnFirstReport = false,
 ) => {
+  const currentTime = Date.now();
+  const monthAgo = currentTime - 1000 * 60 * 60 * 24 * 30;
   const startTime = new Date(startTimeUnixMS);
   const endTime = new Date(endTimeUnixMS);
+
+  if (startTimeUnixMS > currentTime || endTimeUnixMS < monthAgo) {
+    // Available data varies, might have months back data, but it's unlikely
+    logger.info(`Skipping noaabuoy scrape`);
+    return weatherSourceToFeatureCollection([]);
+  }
+
   const availableStations = await getAvailableStation();
   const buoyWinds = [];
 
