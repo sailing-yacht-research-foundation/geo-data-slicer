@@ -3,14 +3,14 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const turf = require('@turf/turf');
 
+const Queue = require('../classes/Queue');
+const logger = require('../logger');
 const db = require('../models');
-const mainDB = require('../models/mainDB');
+const slicedWeatherDAL = require('../syrf-schema/dataAccess/v1/slicedWeather');
 const downloadFromS3 = require('../utils/downloadFromS3');
 const sliceGribByRegion = require('../utils/sliceGribByRegion');
 const uploadStreamToS3 = require('../utils/uploadStreamToS3');
-const logger = require('../logger');
 const { VALID_TIMEFRAME } = require('../configs/sourceModel.config');
-const Queue = require('../classes/Queue');
 const { MAX_AREA_CONCURRENT_RUN } = require('../configs/general.config');
 
 const Op = db.Sequelize.Op;
@@ -76,7 +76,7 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const startDate = new Date(startTime);
   const endDate = new Date(endTime);
   const files = await db.weatherData.findAll({
-    // limit: 3, //TODO: Remove limit after testing
+    limit: 3, //TODO: Remove limit after testing
     where: {
       model: { [Op.in]: modelsToFetch },
       [Op.or]: [
@@ -291,10 +291,7 @@ async function processFunction(data) {
       }),
   ];
   try {
-    await mainDB.slicedWeather.bulkCreate(arrayData, {
-      ignoreDuplicates: true,
-      validate: true,
-    });
+    await slicedWeatherDAL.bulkInsert(arrayData);
   } catch (error) {
     logger.error(`Error saving metadata to DB: ${error.message}`);
   }
