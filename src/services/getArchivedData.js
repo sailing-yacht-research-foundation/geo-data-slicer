@@ -80,7 +80,7 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
   const startDate = new Date(startTime);
   const endDate = new Date(endTime);
   const files = await db.weatherData.findAll({
-    limit: 3, //TODO: Remove limit after testing
+    // limit: 3, //TODO: Remove limit after testing
     where: {
       model: { [Op.in]: modelsToFetch },
       [Op.or]: [
@@ -322,6 +322,7 @@ async function processFunction(data) {
           runtimes,
           competitionUnitId: raceID,
           originalFileId: id,
+          sliceDate: currentTime,
         };
       }),
     ...successJsons
@@ -342,6 +343,7 @@ async function processFunction(data) {
           runtimes: row.runtimes,
           competitionUnitId: raceID,
           originalFileId: id,
+          sliceDate: currentTime,
         };
       }),
   ];
