@@ -39,11 +39,17 @@ class Queue {
       logger.info(
         `Processing next queue. Left in Queue: ${this.elements.length}, Currently Processing: ${this.currentProcessing}`,
       );
-      this.processFunction(nextData).then((result) => {
-        this.results.push(result);
-        this.currentProcessing--;
-        this.process();
-      });
+      this.processFunction(nextData)
+        .then((result) => {
+          this.results.push(result);
+        })
+        .catch((error) => {
+          console.trace(error);
+        })
+        .finally(() => {
+          this.currentProcessing--;
+          this.process();
+        });
       this.process();
     }
   }
