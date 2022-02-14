@@ -1,0 +1,8 @@
+const path = require('path');
+
+module.exports = {
+  'models-path': path.resolve('src', 'syrf-schema'),
+  config: path.resolve('src', 'database', 'config.json'),
+  'seeders-path': path.resolve('src', 'syrf-schema', 'seeders'),
+  'migrations-path': path.resolve('src', 'syrf-schema', 'migrations'),
+};

@@ -12,7 +12,10 @@ const createShipReport = require('./createShipReport');
 const createWindfinderWind = require('./createWindfinderWind');
 const createNoaaBuoyWind = require('./createNoaaBuoyWind');
 const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
+const competitionDAL = require('../syrf-schema/dataAccess/v1/competitionUnit');
+const { dataSources } = require('../syrf-schema/enums');
 const { MAX_AREA_CONCURRENT_RUN } = require('../configs/general.config');
+const recalculateQueue = require('../queues/recalculateQueue');
 const logger = require('../logger');
 
 async function processRegionRequest(
@@ -98,6 +101,27 @@ async function processRegionRequest(
     shipReportsFull,
     turf.bboxPolygon(containerBbox),
   );
+
+  const competitionDetail = await competitionDAL.getById(raceID);
+  // If source is not from syrf and import, should
+  if (
+    competitionDetail?.calendarEvent &&
+    ![dataSources.IMPORT, dataSources.SYRF].includes(
+      competitionDetail.calendarEvent.source,
+    )
+  ) {
+    logger.info(
+      `Competition ${raceID} is an imported track, adding recalculation queue`,
+    );
+    // Should add job to recalculate queue
+    recalculateQueue.addJob(
+      {
+        competitionUnitId: raceID,
+        recalculateWeather: true,
+      },
+      { jobId: competitionUnitId },
+    );
+  }
 
   if (webhook) {
     try {

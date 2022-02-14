@@ -1,10 +1,10 @@
 const Sequelize = require('sequelize');
 
-const DB_HOST = process.env.DB_HOST;
-const DB_PORT = process.env.DB_PORT;
-const DB_NAME = process.env.DB_NAME;
-const DB_USER = process.env.DB_USER;
-const DB_PASSWORD = process.env.DB_PASSWORD;
+const DB_HOST = process.env.WEATHER_DB_HOST;
+const DB_PORT = process.env.WEATHER_DB_PORT;
+const DB_NAME = process.env.WEATHER_DB_NAME;
+const DB_USER = process.env.WEATHER_DB_USER;
+const DB_PASSWORD = process.env.WEATHER_DB_PASSWORD;
 
 if (!DB_HOST || !DB_PORT || !DB_NAME || !DB_USER || !DB_PASSWORD) {
   console.error('Invalid database credentials!');
