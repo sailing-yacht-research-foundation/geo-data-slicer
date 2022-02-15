@@ -1,6 +1,6 @@
 {
   "name": "geo-data-slicer",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Grab some geo data.",
   "main": "src/main.js",
   "scripts": {
