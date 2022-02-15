@@ -144,9 +144,16 @@ async function createWindfinderWind(
   endTimeUnixMS,
   stopOnFirstReport = false,
 ) {
+  const currentTime = Date.now();
+  const fiveDaysAgo = currentTime - 1000 * 60 * 60 * 24 * 5;
   const startTime = new Date(startTimeUnixMS);
   const endTime = new Date(endTimeUnixMS);
   const windfinderReports = [];
+
+  if (startTimeUnixMS > currentTime || endTimeUnixMS < fiveDaysAgo) {
+    logger.info(`Skipping windfinder scrape, data won't be available`);
+    return weatherSourceToFeatureCollection([]);
+  }
 
   if (spots.length > 0) {
     let token = null;

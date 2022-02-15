@@ -11,6 +11,11 @@ const getArchivedData = require('./getArchivedData');
 const createShipReport = require('./createShipReport');
 const createWindfinderWind = require('./createWindfinderWind');
 const createNoaaBuoyWind = require('./createNoaaBuoyWind');
+const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
+const competitionDAL = require('../syrf-schema/dataAccess/v1/competitionUnit');
+const { dataSources } = require('../syrf-schema/enums');
+const { MAX_AREA_CONCURRENT_RUN } = require('../configs/general.config');
+const recalculateQueue = require('../queues/recalculateQueue');
 const logger = require('../logger');
 
 async function processRegionRequest(
@@ -36,35 +41,53 @@ async function processRegionRequest(
     raceID,
   );
 
-  const shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
-
-  const spots = windfinderIndex
-    .range(
-      containerBbox[0],
-      containerBbox[1],
-      containerBbox[2],
-      containerBbox[3],
-    )
-    .map((id) => windfinderPoints[id]);
-  const windfinderPromise = createWindfinderWind(
-    spots,
-    startTimeUnixMS,
-    endTimeUnixMS,
-  );
-
-  const buoys = noaaBuoyIndex
-    .range(
-      containerBbox[0],
-      containerBbox[1],
-      containerBbox[2],
-      containerBbox[3],
-    )
-    .map((id) => noaaBuoyPoints[id]);
-  const noaaBuoyPromise = createNoaaBuoyWind(
-    buoys,
-    startTimeUnixMS,
-    endTimeUnixMS,
-  );
+  let shipReportPromise = null;
+  let windfinderPromise = null;
+  let noaaBuoyPromise = null;
+  if (turf.area(turf.bboxPolygon(containerBbox)) > MAX_AREA_CONCURRENT_RUN) {
+    windfinderPromise = new Promise(() => {
+      setTimeout(() => {
+        weatherSourceToFeatureCollection([]);
+        return [];
+      }, 1000);
+    });
+    noaaBuoyPromise = new Promise(() => {
+      setTimeout(() => {
+        weatherSourceToFeatureCollection([]);
+        return [];
+      }, 1000);
+    });
+    shipReportPromise = new Promise(() => {
+      setTimeout(() => {
+        weatherSourceToFeatureCollection([]);
+        return [];
+      }, 1000);
+    });
+  } else {
+    shipReportPromise = createShipReport(startTimeUnixMS, endTimeUnixMS);
+    const spots = windfinderIndex
+      .range(
+        containerBbox[0],
+        containerBbox[1],
+        containerBbox[2],
+        containerBbox[3],
+      )
+      .map((id) => windfinderPoints[id]);
+    windfinderPromise = createWindfinderWind(
+      spots,
+      startTimeUnixMS,
+      endTimeUnixMS,
+    );
+    const buoys = noaaBuoyIndex
+      .range(
+        containerBbox[0],
+        containerBbox[1],
+        containerBbox[2],
+        containerBbox[3],
+      )
+      .map((id) => noaaBuoyPoints[id]);
+    noaaBuoyPromise = createNoaaBuoyWind(buoys, startTimeUnixMS, endTimeUnixMS);
+  }
 
   const [archivedData, shipReportsFull, windfinderWinds, noaaBuoyWinds] =
     await Promise.all([
@@ -78,6 +101,27 @@ async function processRegionRequest(
     shipReportsFull,
     turf.bboxPolygon(containerBbox),
   );
+
+  const competitionDetail = await competitionDAL.getById(raceID);
+  // If source is not from syrf and import, should
+  if (
+    competitionDetail?.calendarEvent &&
+    ![dataSources.IMPORT, dataSources.SYRF].includes(
+      competitionDetail.calendarEvent.source,
+    )
+  ) {
+    logger.info(
+      `Competition ${raceID} is an imported track, adding recalculation queue`,
+    );
+    // Should add job to recalculate queue
+    recalculateQueue.addJob(
+      {
+        competitionUnitId: raceID,
+        recalculateWeather: true,
+      },
+      { jobId: competitionUnitId },
+    );
+  }
 
   if (webhook) {
     try {

@@ -6,7 +6,20 @@ const healthcheckRoutes = require('./routes/healthcheck');
 function createServer() {
   const app = express();
   app.use(express.json());
-
+  if (process.env.NODE_ENV !== 'test') {
+    app.use(
+      require('express-status-monitor')({
+        healthChecks: [
+          {
+            protocol: 'http',
+            host: 'localhost',
+            path: '/health',
+            port: '3000',
+          },
+        ],
+      }),
+    );
+  }
   app.get('/', async (req, res) => {
     res.send('SYRF - Geo Data Slicer');
   });

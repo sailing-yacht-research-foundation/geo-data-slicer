@@ -1,0 +1,3 @@
+[submodule "src/syrf-schema"]
+	path = src/syrf-schema
+	url = https://github.com/sailing-yacht-research-foundation/syrf-schema.git

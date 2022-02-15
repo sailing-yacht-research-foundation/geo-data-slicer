@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - develop
+      - dev-test
 
 jobs:
   deploy:
@@ -12,6 +13,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.CI_TOKEN }}
+          submodules: true
+
+      - name: Init submodule to repo
+        run: git submodule update --init
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -20,6 +27,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      - name: Zip Folder
+        run: zip -r slicer-dev.zip ./data ./src ./operating_folder ./.Dockerignore ./.env.example ./*.sh ./*.js ./*.json ./*.yml
+
+      - name: Upload to S3
+        run: aws s3 cp slicer-dev.zip s3://syrf-dev-env-variables
+
       - name: Create CodeDeploy Deployment
         id: deploy
         run: |
@@ -27,4 +40,4 @@ jobs:
             --application-name geo-data-slicer-dev \
             --deployment-group-name slicercicdDeploymentgroup \
             --deployment-config-name CodeDeployDefault.OneAtATime \
-            --github-location repository=${{ github.repository }},commitId=${{ github.sha }}
+            --s3-location bucket=syrf-dev-env-variables,bundleType=zip,key=slicer-dev.zip
