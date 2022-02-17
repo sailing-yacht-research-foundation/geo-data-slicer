@@ -358,7 +358,7 @@ async function processFunction(data) {
 
   return successJsons.map((row) => {
     return {
-      key: row.key,
+      key: row.s3Key,
       model,
       levels: row.levels,
       variables: row.variables,
