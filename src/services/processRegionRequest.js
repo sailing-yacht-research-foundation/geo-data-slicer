@@ -119,7 +119,7 @@ async function processRegionRequest(
           {
             competitionUnitId: raceID,
           },
-          { jobId: competitionUnitId },
+          { jobId: raceID },
         );
         break;
       }
@@ -131,7 +131,7 @@ async function processRegionRequest(
             competitionUnitId: raceID,
             recalculateWeather: true,
           },
-          { jobId: competitionUnitId },
+          { jobId: raceID },
         );
         break;
       }
