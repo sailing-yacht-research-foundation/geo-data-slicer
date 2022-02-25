@@ -103,15 +103,13 @@ async function processRegionRequest(
   );
 
   const competitionDetail = await competitionDAL.getById(raceID);
-  // If source is not from syrf and import, should
+  // If source is not from syrf
   if (
     competitionDetail?.calendarEvent &&
-    ![dataSources.IMPORT, dataSources.SYRF].includes(
-      competitionDetail.calendarEvent.source,
-    )
+    competitionDetail.calendarEvent.source !== dataSources.SYRF
   ) {
     logger.info(
-      `Competition ${raceID} is an imported track, adding recalculation queue`,
+      `Competition ${raceID} is a scraped/imported track, adding recalculation queue`,
     );
     // Should add job to recalculate queue
     recalculateQueue.addJob(
@@ -121,9 +119,9 @@ async function processRegionRequest(
       },
       { jobId: competitionUnitId },
     );
-  }
-
-  if (webhook) {
+    // Skipping webhook if it's imported/scraped track
+  } else if (webhook) {
+    logger.info(`Sending webhook to ${webhook}. Race ID: ${raceID}`);
     try {
       await axios({
         url: webhook,

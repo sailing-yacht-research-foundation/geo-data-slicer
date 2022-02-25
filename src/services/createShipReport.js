@@ -1,5 +1,5 @@
 const puppeteer = require('puppeteer');
-const turf = require('@turf/turf');
+const logger = require('../logger');
 
 const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatureCollection');
 const valuesToDictionary = require('../utils/valuesToDictionary');
