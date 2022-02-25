@@ -16,6 +16,7 @@ const competitionDAL = require('../syrf-schema/dataAccess/v1/competitionUnit');
 const { dataSources } = require('../syrf-schema/enums');
 const { MAX_AREA_CONCURRENT_RUN } = require('../configs/general.config');
 const recalculateQueue = require('../queues/recalculateQueue');
+const calculateImportedQueue = require('../queues/calculateImportedQueue');
 const logger = require('../logger');
 
 async function processRegionRequest(
@@ -103,27 +104,41 @@ async function processRegionRequest(
   );
 
   const competitionDetail = await competitionDAL.getById(raceID);
-  // If source is not from syrf and import, should
+  // If source is not from syrf
   if (
     competitionDetail?.calendarEvent &&
-    ![dataSources.IMPORT, dataSources.SYRF].includes(
-      competitionDetail.calendarEvent.source,
-    )
+    competitionDetail.calendarEvent.source !== dataSources.SYRF
   ) {
     logger.info(
-      `Competition ${raceID} is an imported track, adding recalculation queue`,
+      `Competition ${raceID} is a scraped/imported track, adding recalculation queue`,
     );
-    // Should add job to recalculate queue
-    recalculateQueue.addJob(
-      {
-        competitionUnitId: raceID,
-        recalculateWeather: true,
-      },
-      { jobId: competitionUnitId },
-    );
-  }
-
-  if (webhook) {
+    switch (competitionDetail.calendarEvent.source) {
+      case dataSources.IMPORT: {
+        // Imported tracks, add job to calculate import queue (AE Regular mode, running in dev)
+        calculateImportedQueue.addJob(
+          {
+            competitionUnitId: raceID,
+          },
+          { jobId: raceID },
+        );
+        break;
+      }
+      default: {
+        // Scraped races, add job to recalculate queue (AE Recalculate mode)
+        // Note: This is disabled in dev
+        recalculateQueue.addJob(
+          {
+            competitionUnitId: raceID,
+            recalculateWeather: true,
+          },
+          { jobId: raceID },
+        );
+        break;
+      }
+    }
+  } else if (webhook) {
+    // Skipping webhook if it's imported/scraped track
+    logger.info(`Sending webhook to ${webhook}. Race ID: ${raceID}`);
     try {
       await axios({
         url: webhook,

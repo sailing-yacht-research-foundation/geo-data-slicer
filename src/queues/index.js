@@ -2,6 +2,7 @@ const IORedis = require('ioredis');
 const logger = require('../logger');
 
 const recalculateQueue = require('./recalculateQueue');
+const calculateImportedQueue = require('./calculateImportedQueue');
 
 let opt = {
   host: process.env.REDIS_HOST,
@@ -33,6 +34,7 @@ const connect = () => {
       );
       clearTimeout(timeout);
       recalculateQueue.setup(connection);
+      calculateImportedQueue.setup(connection);
 
       resolve();
     });
