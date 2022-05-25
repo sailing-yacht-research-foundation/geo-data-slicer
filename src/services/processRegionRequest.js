@@ -153,7 +153,13 @@ async function processRegionRequest(
         },
       });
     } catch (error) {
-      logger.error(`Failed to send data to webhook. Error: ${error.message}`);
+      // Adding more info to see what webhook url is the payload failing 404 to.
+      logger.error(
+        `Failed to send data to webhook [${webhook}] for competition: ${raceID} from event (${competitionDetail?.calendarEvent.name}). Error: ${error.message}`,
+      );
+      if (error.response) {
+        logger.error(JSON.stringify(error.response.data));
+      }
     }
   }
 }

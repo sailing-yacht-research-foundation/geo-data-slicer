@@ -120,10 +120,12 @@ async function processFunction(data) {
     searchEndTime,
     raceID,
   } = data;
-  logger.info(`Processing ${model} - ${id}`);
+  const randomizedID = uuidv4();
+  logger.info(`Processing ${model} - ${id} -> ${randomizedID}`);
   const downloadPath = path.resolve(
     __dirname,
-    `../../operating_folder/${id}.grib2`,
+    // Instead of using original id, use random id, so multiple request that use same file won't throw error on deletion
+    `../../operating_folder/${randomizedID}.grib2`,
   );
   try {
     await downloadFromS3(bucketName, grib_file_url, downloadPath);
@@ -140,7 +142,7 @@ async function processFunction(data) {
 
   if (!fs.existsSync(downloadPath)) {
     logger.error(
-      `Download didn't fail, but file doesn't exist at download path. ID: ${id}, timestamp: ${currentTime.toISOString()}`,
+      `Download didn't fail, but file doesn't exist at download path. ID: ${id} / ${randomizedID}, timestamp: ${currentTime.toISOString()}`,
     );
     return [];
   }
@@ -150,17 +152,28 @@ async function processFunction(data) {
     originalFileId: id,
   });
 
+  const targetFolder = path.resolve(
+    __dirname,
+    `../../operating_folder/${randomizedID}`,
+  );
+  try {
+    await fs.promises.access(targetFolder);
+  } catch (error) {
+    await fs.promises.mkdir(targetFolder);
+  }
+
   const { slicedGribs, geoJsons, runtimes } = await sliceGribByRegion(
     bbox,
     downloadPath,
     {
-      folder: path.resolve(__dirname, `../../operating_folder/`),
-      fileID: id,
+      folder: targetFolder,
+      fileID: randomizedID,
       model,
       searchStartTime,
       searchEndTime,
     },
   );
+
   // Gribs upload process
   logger.info(`Uploading gribs from processing ${id}`);
   const gribFiles = await Promise.all(
@@ -354,6 +367,13 @@ async function processFunction(data) {
     } catch (error) {
       logger.error(`Error saving metadata to DB: ${error.message}`);
     }
+  }
+
+  // Delete the folder no matter what the result is
+  try {
+    await fs.promises.rm(targetFolder, { recursive: true });
+  } catch (error) {
+    logger.error(`Error while cleaning up operation: ${error.message}`);
   }
 
   return successJsons.map((row) => {
