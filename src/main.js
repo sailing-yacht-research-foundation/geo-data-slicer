@@ -14,7 +14,7 @@ const port = process.env.PORT || 3000;
   // Cleanup operating folder before starting up
   const operatingFolder = path.resolve(__dirname, `../operating_folder`);
   try {
-    fsExtra.emptyDir(operatingFolder);
+    await fsExtra.emptyDir(operatingFolder);
   } catch (error) {
     logger.error(
       `Error while cleaning operating folder on startup: ${error.message}`,
