@@ -4,7 +4,7 @@ RUN apt-get install software-properties-common -y
 RUN add-apt-repository ppa:ubuntugis/ppa
 RUN apt-get update \
     && apt-get install tesseract-ocr -y \
-	python3.8 \
+	python3 \
 	python3-pip \
 	python3-setuptools \
 	wget \
@@ -26,8 +26,8 @@ RUN apt-get update \
     && apt-get autoremove
 RUN rm -f /usr/bin/python && ln -s /usr/bin/python3 /usr/bin/python
 
-RUN pip3 install Pillow \
-    && pip3 install pytesseract \
+RUN pip3 install Pillow==8.4.0 \
+    && pip3 install pytesseract==0.3.8 \
     && pip3 install python3-wget
 RUN apt-get update && apt-get install -y cron
 RUN apt-get install m4 -y
@@ -147,7 +147,7 @@ RUN cd /tmp \
 ENV PATH ~/anaconda3/bin:$PATH
 RUN ~/anaconda3/bin/conda update conda
 
-RUN git clone https://github.com/NCAR/wrf-python \
+RUN git clone https://github.com/NCAR/wrf-python --branch 1.3.2.6 --single-branch \
     && cd wrf-python \
     && pip3 install .
 
