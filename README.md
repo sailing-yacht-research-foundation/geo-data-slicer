@@ -24,6 +24,11 @@ To stop pm2 service, run `pm2 stop geoslicer`
 
 All information log & error logs are saved in `logs/combined.log` & `logs/error.log`. Any exception will be store into `logs/exceptions.log`
 
+## Deployment
+
+Slicer is using CodeDeploy to deploy into dev & production servers.
+The CodeDeploy script will zip all the project files and folders (including submodule), upload to s3, and download the files/folders into the server. This is because CodeDeploy only pulls from repo, but doesn't copy the repo itself, so we can't run git submodule update --init in the .sh script. (Pull Request #23)
+
 ## Endpoints
 
 - `/api/v1`

@@ -17,7 +17,6 @@ async function downloadFromS3(bucket, key, downloadPath) {
     const data = s3.getObject(params).createReadStream();
     const errorHandler = (err) => {
       file.destroy();
-      fs.unlinkSync(downloadPath);
       reject(err);
     };
     data
