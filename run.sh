@@ -22,4 +22,4 @@ sudo docker rm slicer
 sudo docker run -d --restart unless-stopped --env-file=.env -p 3000:3000 --name slicer slicer:latest
 
 #delete unused images
-#TODO: Use another command or script to delete
+docker rmi -f $(docker images -q) 2>/dev/null
