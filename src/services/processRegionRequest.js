@@ -7,7 +7,7 @@ const {
   noaaBuoyIndex,
   noaaBuoyPoints,
 } = require('./createSourceIndex');
-const getArchivedData = require('./getArchivedData');
+const { getArchivedData } = require('./getArchivedData');
 const createShipReport = require('./createShipReport');
 const createWindfinderWind = require('./createWindfinderWind');
 const createNoaaBuoyWind = require('./createNoaaBuoyWind');

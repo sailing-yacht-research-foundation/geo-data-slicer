@@ -4,7 +4,7 @@ RUN apt-get install software-properties-common -y
 RUN add-apt-repository ppa:ubuntugis/ppa
 RUN apt-get update \
     && apt-get install tesseract-ocr -y \
-	python3 \
+	python3.8 \
 	python3-pip \
 	python3-setuptools \
 	wget \
@@ -138,7 +138,7 @@ RUN wget https://confluence.ecmwf.int/download/attachments/45757960/eccodes-2.15
     && rm eccodes-2.15.0-Source.tar.gz \
     && rm -rf eccodes-2.15.0-Source \
     && pip3 install eccodes-python 
-RUN pip3 install scipy ipython jupyter sympy nose
+
 # Conda and Iris
 RUN cd /tmp \
     && curl -O https://repo.anaconda.com/archive/Anaconda3-2019.03-Linux-x86_64.sh \
@@ -173,6 +173,9 @@ RUN apt-get update && \
     echo oracle-java17-installer shared/accepted-oracle-licence-v1-3 boolean true | /usr/bin/debconf-set-selections && \
     yes | apt-get install -y oracle-java17-installer && \
     yes | apt install -y oracle-java17-set-default
+
+# Moving this to bottom, it keeps failing because of future annotation error when in it's original location
+RUN pip3 install --upgrade scipy ipython jupyter sympy nose
 
 RUN npm install -g weacast-grib2json
 RUN export JAVA_HOME=/usr

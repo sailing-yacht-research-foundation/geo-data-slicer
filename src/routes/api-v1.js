@@ -3,7 +3,7 @@ const express = require('express');
 const validateRegionRequest = require('../middlewares/validateRegionRequest');
 const validatePointRequest = require('../middlewares/validatePointRequest');
 
-const processRegionRequest = require('../services/processRegionRequest');
+const slicerQueue = require('../queues/slicerQueue');
 const processPointRequest = require('../services/processPointRequest');
 const logger = require('../logger');
 
@@ -32,14 +32,17 @@ router.post('/', validateRegionRequest, async function (request, response) {
   // Payload
   const raceID = payload ? payload.raceID : null;
 
-  processRegionRequest(
-    roi,
-    startTimeUnixMS,
-    endTimeUnixMS,
-    webhook,
-    webhookToken,
-    updateFrequencyMinutes,
-    raceID,
+  slicerQueue.addJob(
+    {
+      roi,
+      startTimeUnixMS,
+      endTimeUnixMS,
+      webhook,
+      webhookToken,
+      updateFrequencyMinutes,
+      raceID,
+    },
+    raceID ? { jobId: raceID } : undefined,
   );
   response.send('ok');
   logger.info('Region request received & processed');
