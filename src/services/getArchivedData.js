@@ -21,7 +21,7 @@ const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
 const slicedBucket = process.env.AWS_S3_SLICED_BUCKET;
 
-async function removeRedundantFiles(files) {
+exports.removeRedundantFiles = async (files) => {
   const finalFiles = [];
   for (let i = 0; i < files.length; i++) {
     const { created_at, model, start_time, end_time } = files[i];
@@ -47,9 +47,9 @@ async function removeRedundantFiles(files) {
     }
   }
   return finalFiles;
-}
+};
 
-async function getWeatherFilesByRegion(roi, startTime, endTime) {
+exports.getWeatherFilesByRegion = async (roi, startTime, endTime) => {
   const query = `SELECT "model_name" FROM "SourceModels" WHERE ST_Contains ( "spatial_boundary", ST_GeomFromText ( :polygon, 4326 ) )`;
   const result = await db.sequelize.query(query, {
     replacements: {
@@ -105,10 +105,10 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
     order: [['created_at', 'DESC']],
     raw: true,
   });
-  return removeRedundantFiles(files);
-}
+  return this.removeRedundantFiles(files);
+};
 
-async function processFunction(data) {
+exports.processFunction = async (data) => {
   const {
     id,
     model,
@@ -385,11 +385,15 @@ async function processFunction(data) {
       runtimes: row.runtimes,
     };
   });
-}
+};
 
-async function getArchivedData(bbox, startTime, endTime, raceID) {
+exports.getArchivedData = async (bbox, startTime, endTime, raceID) => {
   const bboxPolygon = turf.bboxPolygon(bbox);
-  const files = await getWeatherFilesByRegion(bboxPolygon, startTime, endTime);
+  const files = await this.getWeatherFilesByRegion(
+    bboxPolygon,
+    startTime,
+    endTime,
+  );
 
   let maxConcurrentProcess = 3;
   if (turf.area(bboxPolygon) > MAX_AREA_CONCURRENT_RUN) {
@@ -397,7 +401,7 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
   }
   const queue = new Queue({
     maxConcurrentProcess,
-    processFunction,
+    processFunction: this.processFunction,
   });
   queue.enqueue(
     files.map((row) => {
@@ -413,6 +417,4 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
 
   const results = await queue.waitFinish();
   return results;
-}
-
-module.exports = getArchivedData;
+};
