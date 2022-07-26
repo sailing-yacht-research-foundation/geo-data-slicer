@@ -1,4 +1,7 @@
 const MAX_AREA_CONCURRENT_RUN = 200000000000; // in m2, 4x4 lonxlat = 197960531766
+const CONCURRENT_SLICE_REQUEST = Number(
+  process.env.CONCURRENT_SLICE_REQUEST || '4',
+);
 
 const WEATHER_FILE_TYPES = {
   grib: 'GRIB',
@@ -7,5 +10,6 @@ const WEATHER_FILE_TYPES = {
 
 module.exports = {
   MAX_AREA_CONCURRENT_RUN,
+  CONCURRENT_SLICE_REQUEST,
   WEATHER_FILE_TYPES,
 };
