@@ -1,5 +1,6 @@
 const fs = require('fs');
 const { promisify } = require('util');
+const exec = require('child_process').exec;
 const execPromise = promisify(require('child_process').exec);
 const deleteFile = promisify(fs.unlink);
 
@@ -8,7 +9,8 @@ const csvToGeoJson = require('./csvToGeoJson');
 const logger = require('../logger');
 
 async function sliceGribByRegion(bbox, filename, options) {
-  let { fileID, folder, model, searchStartTime, searchEndTime } = options;
+  let { fileID, folder, model, searchStartTime, searchEndTime, sliceJson } =
+    options;
   // Need to round up and down values, so that bounding box doesn't become too small
   // https://www.cpc.ncep.noaa.gov/products/wesley/wgrib2/small_grib.html
   const leftLon = Math.floor(bbox[0]);
@@ -24,10 +26,40 @@ async function sliceGribByRegion(bbox, filename, options) {
     await execPromise(
       `wgrib2 ${filename} ${matchString} -small_grib ${leftLon}:${rightLon} ${bottomLat}:${topLat} ${folder}/small_${fileID}.grib2`,
     );
-    await execPromise(
-      `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
-    );
-    await deleteFile(filename);
+
+    if (!sliceJson) {
+      // Keep the process to csv, to get the available levels, and variables
+      // TODO: Need to modify the bounding box based on the grib, since non-global grib might not have the 1-2 area
+      const { stdout: infoOutput } = await execPromise(
+        `wgrib2 ${filename} -V -d 1`,
+      );
+
+      const outputArray = infoOutput.split('\n');
+      let latitude = 0;
+      let longitude = 0;
+      outputArray.forEach((line) => {
+        const lineData = line.trim().split(' ');
+        if (lineData[0] === 'lat') {
+          latitude = Number(lineData[1]);
+        }
+        if (lineData[0] === 'lon') {
+          longitude = Number(lineData[1]);
+        }
+      });
+      console.log(`Splitting with ${longitude}, ${latitude}`);
+      await execPromise(
+        `wgrib2 ${filename} ${matchString} -small_grib ${longitude}:${longitude} ${latitude}:${latitude} ${folder}/sampling_${fileID}.grib2`,
+      );
+      await execPromise(
+        `wgrib2 ${folder}/sampling_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
+      );
+
+      await deleteFile(`${folder}/sampling_${fileID}.grib2`);
+    } else {
+      await execPromise(
+        `wgrib2 ${folder}/small_${fileID}.grib2 -csv ${folder}/${fileID}.csv`,
+      );
+    }
     const { runtimes, variablesToLevel, geoJsons } = await csvToGeoJson({
       id: fileID,
       model,
@@ -35,8 +67,16 @@ async function sliceGribByRegion(bbox, filename, options) {
       searchEndTime,
       csvFilePath: `${folder}/${fileID}.csv`,
     });
-    await deleteFile(`${folder}/${fileID}.csv`);
+
+    await Promise.all([
+      deleteFile(`${folder}/${fileID}.csv`),
+      deleteFile(filename),
+    ]);
+
     let slicedGribs = [];
+    // TODO: Add slicing again, by time. Need to make sure we get the correct time slices.
+    // Only need to do if runtimes length is greater than 1.
+    // If it is, need to calculate the difference betweeneach time. That will be the duration. Is it within the competition time
     await Promise.all(
       Array.from(variablesToLevel.keys()).map(async (varGroup) => {
         const levelsAvailable = variablesToLevel.get(varGroup);
@@ -131,7 +171,7 @@ async function sliceGribByRegion(bbox, filename, options) {
 
     return {
       slicedGribs,
-      geoJsons,
+      geoJsons: sliceJson ? geoJsons : [],
       runtimes: Array.from(runtimes),
     };
   } catch (error) {

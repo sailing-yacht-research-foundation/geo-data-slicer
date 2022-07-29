@@ -119,6 +119,7 @@ exports.processFunction = async (data) => {
     searchStartTime,
     searchEndTime,
     raceID,
+    sliceJson,
   } = data;
   const randomizedID = uuidv4();
   logger.info(`Processing ${model} - ${id} -> ${randomizedID}`);
@@ -171,6 +172,7 @@ exports.processFunction = async (data) => {
       model,
       searchStartTime,
       searchEndTime,
+      sliceJson,
     },
   );
 
@@ -387,7 +389,13 @@ exports.processFunction = async (data) => {
   });
 };
 
-exports.getArchivedData = async (bbox, startTime, endTime, raceID) => {
+exports.getArchivedData = async (
+  bbox,
+  startTime,
+  endTime,
+  raceID,
+  sliceJson,
+) => {
   const bboxPolygon = turf.bboxPolygon(bbox);
   const files = await this.getWeatherFilesByRegion(
     bboxPolygon,
@@ -411,6 +419,7 @@ exports.getArchivedData = async (bbox, startTime, endTime, raceID) => {
         searchStartTime: startTime,
         searchEndTime: endTime,
         raceID,
+        sliceJson,
       };
     }),
   );
