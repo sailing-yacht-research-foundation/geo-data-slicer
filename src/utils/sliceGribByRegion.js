@@ -75,9 +75,6 @@ async function sliceGribByRegion(bbox, filename, options) {
     await deleteFile(`${folder}/${fileID}.csv`);
 
     let slicedGribs = [];
-    // TODO: Add slicing again, by time. Need to make sure we get the correct time slices.
-    // Only need to do if runtimes length is greater than 1.
-    // If it is, need to calculate the difference betweeneach time. That will be the duration. Is it within the competition time
     await Promise.all(
       runtimes.map(async (runtime) => {
         const filterTime = dayjs(runtime, 'YYYY-MM-DD HH:mm:ss+00').format(
@@ -87,7 +84,6 @@ async function sliceGribByRegion(bbox, filename, options) {
           Array.from(variablesToLevel.keys()).map(async (varGroup) => {
             const levelsAvailable = variablesToLevel.get(varGroup);
             if (levelsAvailable && levelsAvailable.length > 0) {
-              // let varLevels = Array.from(levelsAvailable).join('|');
               switch (varGroup) {
                 case 'uvgrd':
                   await Promise.all(
