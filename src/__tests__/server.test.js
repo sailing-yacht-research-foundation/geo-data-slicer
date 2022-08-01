@@ -1,11 +1,12 @@
 const supertest = require('supertest');
 
 const createServer = require('../server');
-const processRegionRequest = require('../services/processRegionRequest');
 const processPointRequest = require('../services/processPointRequest');
 
-jest.mock('../services/processRegionRequest', () => jest.fn());
+const slicerQueue = require('../queues/slicerQueue');
+
 jest.mock('../services/processPointRequest', () => jest.fn());
+jest.mock('../queues/slicerQueue');
 
 describe('HTTP Server for Geo Data Slicer', () => {
   let app;
@@ -257,7 +258,7 @@ describe('HTTP Server for Geo Data Slicer', () => {
       })
       .expect(200);
     expect(response.text).toBe('ok');
-    expect(processRegionRequest).toHaveBeenCalledTimes(1);
+    expect(slicerQueue.addJob).toHaveBeenCalledTimes(1);
 
     const response2 = await supertest(app)
       .post('/api/v1')
@@ -288,7 +289,7 @@ describe('HTTP Server for Geo Data Slicer', () => {
       .expect(200);
 
     expect(response2.text).toBe('ok');
-    expect(processRegionRequest).toHaveBeenCalledTimes(2);
+    expect(slicerQueue.addJob).toHaveBeenCalledTimes(2);
   });
 
   test('POST /api/v1 [Weather for Point of Interest] - Missing Required Fields', (done) => {

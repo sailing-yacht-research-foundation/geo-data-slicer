@@ -19,7 +19,7 @@ const recalculateQueue = require('../queues/recalculateQueue');
 const calculateImportedQueue = require('../queues/calculateImportedQueue');
 const logger = require('../logger');
 
-async function processRegionRequest(
+async function processRegionRequest({
   roi,
   startTimeUnixMS,
   endTimeUnixMS,
@@ -27,7 +27,8 @@ async function processRegionRequest(
   webhookToken,
   updateFrequencyMinutes,
   raceID,
-) {
+  sliceJson = true,
+}) {
   const bbox = turf.bbox(roi);
   const leftLon = Math.floor(bbox[0]);
   const bottomLat = Math.floor(bbox[1]);
@@ -40,6 +41,7 @@ async function processRegionRequest(
     startTimeUnixMS,
     endTimeUnixMS,
     raceID,
+    sliceJson,
   );
 
   let shipReportPromise = null;

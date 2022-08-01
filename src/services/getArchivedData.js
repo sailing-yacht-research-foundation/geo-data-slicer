@@ -119,6 +119,7 @@ exports.processFunction = async (data) => {
     searchStartTime,
     searchEndTime,
     raceID,
+    sliceJson,
   } = data;
   const randomizedID = uuidv4();
   logger.info(`Processing ${model} - ${id} -> ${randomizedID}`);
@@ -162,7 +163,7 @@ exports.processFunction = async (data) => {
     await fs.promises.mkdir(targetFolder);
   }
 
-  const { slicedGribs, geoJsons, runtimes } = await sliceGribByRegion(
+  const { slicedGribs, geoJsons } = await sliceGribByRegion(
     bbox,
     downloadPath,
     {
@@ -171,6 +172,7 @@ exports.processFunction = async (data) => {
       model,
       searchStartTime,
       searchEndTime,
+      sliceJson,
     },
   );
 
@@ -178,7 +180,7 @@ exports.processFunction = async (data) => {
   logger.info(`Uploading gribs from processing ${id}`);
   const gribFiles = await Promise.all(
     slicedGribs.map(async (slicedGrib) => {
-      const { filePath, variables, levels } = slicedGrib;
+      const { filePath, variables, levels, runtimes } = slicedGrib;
       let gribDetail = null;
       const gribUuid = uuidv4();
       const sameSlice = existingSlices.find((sliceRow) => {
@@ -227,6 +229,7 @@ exports.processFunction = async (data) => {
         s3Key: gribDetail ? gribDetail.Key : null,
         variables,
         levels,
+        runtimes,
       };
     }),
   );
@@ -332,7 +335,7 @@ exports.processFunction = async (data) => {
           boundingBox: bboxPolygon.geometry,
           levels: row.levels,
           variables: row.variables,
-          runtimes,
+          runtimes: row.runtimes,
           competitionUnitId: raceID,
           originalFileId: id,
           sliceDate: currentTime,
@@ -387,13 +390,20 @@ exports.processFunction = async (data) => {
   });
 };
 
-exports.getArchivedData = async (bbox, startTime, endTime, raceID) => {
+exports.getArchivedData = async (
+  bbox,
+  startTime,
+  endTime,
+  raceID,
+  sliceJson,
+) => {
   const bboxPolygon = turf.bboxPolygon(bbox);
   const files = await this.getWeatherFilesByRegion(
     bboxPolygon,
     startTime,
     endTime,
   );
+  logger.info(`Competition ${raceID} has ${files.length} files to process.`);
 
   let maxConcurrentProcess = 3;
   if (turf.area(bboxPolygon) > MAX_AREA_CONCURRENT_RUN) {
@@ -411,6 +421,7 @@ exports.getArchivedData = async (bbox, startTime, endTime, raceID) => {
         searchStartTime: startTime,
         searchEndTime: endTime,
         raceID,
+        sliceJson,
       };
     }),
   );
