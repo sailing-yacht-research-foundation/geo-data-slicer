@@ -29,9 +29,10 @@ const setup = (connection) => {
         webhookToken,
         updateFrequencyMinutes,
         raceID,
+        sliceJson = true,
       } = job.data;
 
-      await processRegionRequest(
+      await processRegionRequest({
         roi,
         startTimeUnixMS,
         endTimeUnixMS,
@@ -39,7 +40,8 @@ const setup = (connection) => {
         webhookToken,
         updateFrequencyMinutes,
         raceID,
-      );
+        sliceJson,
+      });
 
       return true;
     },
