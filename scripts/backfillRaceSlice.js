@@ -106,6 +106,7 @@ const slicerUrl = 'http://localhost:3000/api/v1';
       console.error(
         `Competition ${id} failed to queue into slicer: ${err.message}`,
       );
+      failures.add(id);
     }
     await sleep(200);
   }
