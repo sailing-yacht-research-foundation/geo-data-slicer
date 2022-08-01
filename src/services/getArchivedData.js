@@ -163,7 +163,7 @@ exports.processFunction = async (data) => {
     await fs.promises.mkdir(targetFolder);
   }
 
-  const { slicedGribs, geoJsons, runtimes } = await sliceGribByRegion(
+  const { slicedGribs, geoJsons } = await sliceGribByRegion(
     bbox,
     downloadPath,
     {
@@ -180,7 +180,7 @@ exports.processFunction = async (data) => {
   logger.info(`Uploading gribs from processing ${id}`);
   const gribFiles = await Promise.all(
     slicedGribs.map(async (slicedGrib) => {
-      const { filePath, variables, levels } = slicedGrib;
+      const { filePath, variables, levels, runtimes } = slicedGrib;
       let gribDetail = null;
       const gribUuid = uuidv4();
       const sameSlice = existingSlices.find((sliceRow) => {
@@ -229,6 +229,7 @@ exports.processFunction = async (data) => {
         s3Key: gribDetail ? gribDetail.Key : null,
         variables,
         levels,
+        runtimes,
       };
     }),
   );
@@ -334,7 +335,7 @@ exports.processFunction = async (data) => {
           boundingBox: bboxPolygon.geometry,
           levels: row.levels,
           variables: row.variables,
-          runtimes,
+          runtimes: row.runtimes,
           competitionUnitId: raceID,
           originalFileId: id,
           sliceDate: currentTime,
@@ -402,6 +403,7 @@ exports.getArchivedData = async (
     startTime,
     endTime,
   );
+  logger.info(`Competition ${raceID} has ${files.length} files to process.`);
 
   let maxConcurrentProcess = 3;
   if (turf.area(bboxPolygon) > MAX_AREA_CONCURRENT_RUN) {
