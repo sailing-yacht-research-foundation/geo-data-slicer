@@ -77,34 +77,56 @@ exports.getWeatherFilesByRegion = async (roi, startTime, endTime) => {
     ];
   }
 
-  const startDate = new Date(startTime);
-  const endDate = new Date(endTime);
-  const files = await db.weatherData.findAll({
-    // limit: 3, //TODO: Remove limit after testing
+  /*
+    Important Notes on this query.
+    The original query works for track nows, and syrf regular races (with a bug found during testing), it triggers index scan.
+    However, when it tries to slice older races, regardless of source, it becomes very slow (200s++). The query becomes a seq scan and much slower.
+    Several solutions has been tried (gist index, multicol index, tstzrange, etc) but everything is either not working or still very slow.
+    From reading around here and there, the cause seems to be how postgresql automatically decide whether to use index or not on certain datasets, 
+    judging from the condition. It seems if the condition returns more than certain  threshold of the data, it uses seq scan instead of index scan.
+    So to make sure it's using index scan, each column must be limited 
+
+    References: 
+    https://dba.stackexchange.com/questions/39589/optimizing-queries-on-a-range-of-timestamps-two-columns
+    https://stackoverflow.com/questions/8839117/postgresql-date-query-performance-problems
+    https://stackoverflow.com/questions/1063043/how-to-release-possible-postgres-row-locks
+    https://stackoverflow.com/questions/67759944/postgresql-best-index-for-datetime-ranges
+
+    For gist index on range, tested using small local db, the analysis score is still using seq scan, but this test is not done in the actual db
+    because creating the index required is taking very long time (2000s elapsed and still not finished, so I killed it)
+    The workaround for this is to add/subtract 1day (cause ARPEGE_WORLD grib files has 24h range) to the filter date range, and apply it to both 
+    start_time and end_time. This will return more than what we need, but we can just filter what we don't need using javascript.
+    
+    Original Query (with fix to the bug found) for reference: SELECT * FROM  "WeatherDatas" WHERE NOT ("start_time" > filterEndTime OR "end_time" < filterStartTime)
+    */
+  //
+  const startDate = new Date(startTime - 1000 * 60 * 60 * 24);
+  const endDate = new Date(endTime + 1000 * 60 * 60 * 24);
+  const allFiles = await db.weatherData.findAll({
     where: {
       model: { [Op.in]: modelsToFetch },
-      [Op.or]: [
-        {
-          start_time: {
-            [Op.lte]: startDate,
-          },
-          end_time: {
-            [Op.gte]: startDate,
-          },
-        },
-        {
-          start_time: {
-            [Op.lte]: endDate,
-          },
-          end_time: {
-            [Op.gte]: endDate,
-          },
-        },
-      ],
+      start_time: {
+        [Op.lte]: endDate,
+        [Op.gte]: startDate,
+      },
+      end_time: {
+        [Op.lte]: endDate,
+        [Op.gte]: startDate,
+      },
     },
     order: [['created_at', 'DESC']],
     raw: true,
   });
+
+  // Filter non-useful gribs
+  const files = allFiles.filter((file) => {
+    const { start_time: gribStartTime, end_time: gribEndTime } = file;
+    return !(
+      gribStartTime.getTime() > endTime || gribEndTime.getTime() < startTime
+    );
+  });
+  logger.info(`Fetched ${allFiles.length}, filtered down to: ${files.length}`);
+
   return this.removeRedundantFiles(files);
 };
 
