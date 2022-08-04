@@ -183,6 +183,8 @@ RUN export PATH=$PATH:/usr/lib/node_modules/weacast-grib2json/bin
 
 # Thank goodness we're done.
 
+RUN pip3 install cdsapi
+
 WORKDIR /data
 RUN npm install pm2 -g
 
