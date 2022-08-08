@@ -21,7 +21,7 @@ const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
 const slicedBucket = process.env.AWS_S3_SLICED_BUCKET;
 
-async function removeRedundantFiles(files) {
+exports.removeRedundantFiles = async (files) => {
   const finalFiles = [];
   for (let i = 0; i < files.length; i++) {
     const { created_at, model, start_time, end_time } = files[i];
@@ -47,9 +47,9 @@ async function removeRedundantFiles(files) {
     }
   }
   return finalFiles;
-}
+};
 
-async function getWeatherFilesByRegion(roi, startTime, endTime) {
+exports.getWeatherFilesByRegion = async (roi, startTime, endTime) => {
   const query = `SELECT "model_name" FROM "SourceModels" WHERE ST_Contains ( "spatial_boundary", ST_GeomFromText ( :polygon, 4326 ) )`;
   const result = await db.sequelize.query(query, {
     replacements: {
@@ -77,38 +77,60 @@ async function getWeatherFilesByRegion(roi, startTime, endTime) {
     ];
   }
 
-  const startDate = new Date(startTime);
-  const endDate = new Date(endTime);
-  const files = await db.weatherData.findAll({
-    // limit: 3, //TODO: Remove limit after testing
+  /*
+    Important Notes on this query.
+    The original query works for track nows, and syrf regular races (with a bug found during testing), it triggers index scan.
+    However, when it tries to slice older races, regardless of source, it becomes very slow (200s++). The query becomes a seq scan and much slower.
+    Several solutions has been tried (gist index, multicol index, tstzrange, etc) but everything is either not working or still very slow.
+    From reading around here and there, the cause seems to be how postgresql automatically decide whether to use index or not on certain datasets, 
+    judging from the condition. It seems if the condition returns more than certain  threshold of the data, it uses seq scan instead of index scan.
+    So to make sure it's using index scan, each column must be limited 
+
+    References: 
+    https://dba.stackexchange.com/questions/39589/optimizing-queries-on-a-range-of-timestamps-two-columns
+    https://stackoverflow.com/questions/8839117/postgresql-date-query-performance-problems
+    https://stackoverflow.com/questions/1063043/how-to-release-possible-postgres-row-locks
+    https://stackoverflow.com/questions/67759944/postgresql-best-index-for-datetime-ranges
+
+    For gist index on range, tested using small local db, the analysis score is still using seq scan, but this test is not done in the actual db
+    because creating the index required is taking very long time (2000s elapsed and still not finished, so I killed it)
+    The workaround for this is to add/subtract 1day (cause ARPEGE_WORLD grib files has 24h range) to the filter date range, and apply it to both 
+    start_time and end_time. This will return more than what we need, but we can just filter what we don't need using javascript.
+    
+    Original Query (with fix to the bug found) for reference: SELECT * FROM  "WeatherDatas" WHERE NOT ("start_time" > filterEndTime OR "end_time" < filterStartTime)
+    */
+  //
+  const startDate = new Date(startTime - 1000 * 60 * 60 * 24);
+  const endDate = new Date(endTime + 1000 * 60 * 60 * 24);
+  const allFiles = await db.weatherData.findAll({
     where: {
       model: { [Op.in]: modelsToFetch },
-      [Op.or]: [
-        {
-          start_time: {
-            [Op.lte]: startDate,
-          },
-          end_time: {
-            [Op.gte]: startDate,
-          },
-        },
-        {
-          start_time: {
-            [Op.lte]: endDate,
-          },
-          end_time: {
-            [Op.gte]: endDate,
-          },
-        },
-      ],
+      start_time: {
+        [Op.lte]: endDate,
+        [Op.gte]: startDate,
+      },
+      end_time: {
+        [Op.lte]: endDate,
+        [Op.gte]: startDate,
+      },
     },
     order: [['created_at', 'DESC']],
     raw: true,
   });
-  return removeRedundantFiles(files);
-}
 
-async function processFunction(data) {
+  // Filter non-useful gribs
+  const files = allFiles.filter((file) => {
+    const { start_time: gribStartTime, end_time: gribEndTime } = file;
+    return !(
+      gribStartTime.getTime() > endTime || gribEndTime.getTime() < startTime
+    );
+  });
+  logger.info(`Fetched ${allFiles.length}, filtered down to: ${files.length}`);
+
+  return this.removeRedundantFiles(files);
+};
+
+exports.processFunction = async (data) => {
   const {
     id,
     model,
@@ -119,6 +141,7 @@ async function processFunction(data) {
     searchStartTime,
     searchEndTime,
     raceID,
+    sliceJson,
   } = data;
   const randomizedID = uuidv4();
   logger.info(`Processing ${model} - ${id} -> ${randomizedID}`);
@@ -162,7 +185,7 @@ async function processFunction(data) {
     await fs.promises.mkdir(targetFolder);
   }
 
-  const { slicedGribs, geoJsons, runtimes } = await sliceGribByRegion(
+  const { slicedGribs, geoJsons } = await sliceGribByRegion(
     bbox,
     downloadPath,
     {
@@ -171,6 +194,7 @@ async function processFunction(data) {
       model,
       searchStartTime,
       searchEndTime,
+      sliceJson,
     },
   );
 
@@ -178,7 +202,7 @@ async function processFunction(data) {
   logger.info(`Uploading gribs from processing ${id}`);
   const gribFiles = await Promise.all(
     slicedGribs.map(async (slicedGrib) => {
-      const { filePath, variables, levels } = slicedGrib;
+      const { filePath, variables, levels, runtimes } = slicedGrib;
       let gribDetail = null;
       const gribUuid = uuidv4();
       const sameSlice = existingSlices.find((sliceRow) => {
@@ -227,6 +251,7 @@ async function processFunction(data) {
         s3Key: gribDetail ? gribDetail.Key : null,
         variables,
         levels,
+        runtimes,
       };
     }),
   );
@@ -332,7 +357,7 @@ async function processFunction(data) {
           boundingBox: bboxPolygon.geometry,
           levels: row.levels,
           variables: row.variables,
-          runtimes,
+          runtimes: row.runtimes,
           competitionUnitId: raceID,
           originalFileId: id,
           sliceDate: currentTime,
@@ -385,11 +410,22 @@ async function processFunction(data) {
       runtimes: row.runtimes,
     };
   });
-}
+};
 
-async function getArchivedData(bbox, startTime, endTime, raceID) {
+exports.getArchivedData = async (
+  bbox,
+  startTime,
+  endTime,
+  raceID,
+  sliceJson,
+) => {
   const bboxPolygon = turf.bboxPolygon(bbox);
-  const files = await getWeatherFilesByRegion(bboxPolygon, startTime, endTime);
+  const files = await this.getWeatherFilesByRegion(
+    bboxPolygon,
+    startTime,
+    endTime,
+  );
+  logger.info(`Competition ${raceID} has ${files.length} files to process.`);
 
   let maxConcurrentProcess = 3;
   if (turf.area(bboxPolygon) > MAX_AREA_CONCURRENT_RUN) {
@@ -397,7 +433,7 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
   }
   const queue = new Queue({
     maxConcurrentProcess,
-    processFunction,
+    processFunction: this.processFunction,
   });
   queue.enqueue(
     files.map((row) => {
@@ -407,12 +443,11 @@ async function getArchivedData(bbox, startTime, endTime, raceID) {
         searchStartTime: startTime,
         searchEndTime: endTime,
         raceID,
+        sliceJson,
       };
     }),
   );
 
   const results = await queue.waitFinish();
   return results;
-}
-
-module.exports = getArchivedData;
+};
