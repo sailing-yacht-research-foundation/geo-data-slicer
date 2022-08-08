@@ -5,6 +5,7 @@ const validateRegionRequest = require('../middlewares/validateRegionRequest');
 const validatePointRequest = require('../middlewares/validatePointRequest');
 
 const slicerQueue = require('../queues/slicerQueue');
+const era5Queue = require('../queues/era5Queue');
 const processPointRequest = require('../services/processPointRequest');
 const logger = require('../logger');
 const { MAX_AREA_CONCURRENT_RUN } = require('../configs/general.config');
@@ -90,6 +91,19 @@ router.post('/point', validatePointRequest, async function (request, response) {
   );
   response.send('ok');
   logger.info('Point request received & processed');
+});
+
+router.post('/test', async function (request, response) {
+  const { competitionUnitId } = request.body;
+
+  era5Queue.addJob(
+    {
+      competitionUnitId,
+    },
+    { jobId: competitionUnitId },
+  );
+  response.send('ok');
+  logger.info('Region request received & processed');
 });
 
 module.exports = router;
