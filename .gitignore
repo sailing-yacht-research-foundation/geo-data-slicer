@@ -106,3 +106,6 @@ dist
 src/database/config.json
 
 .cdsapirc
+
+# ECCodes GRIB1 & GRIB2 definition file
+eccodes/defaults 
