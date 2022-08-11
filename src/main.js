@@ -1,4 +1,5 @@
 require('dotenv').config();
+const fsPromise = require('fs/promises');
 const fsExtra = require('fs-extra');
 const path = require('path');
 
@@ -13,6 +14,12 @@ const port = process.env.PORT || 3000;
 (async () => {
   // Cleanup operating folder before starting up
   const operatingFolder = path.resolve(__dirname, `../operating_folder`);
+
+  try {
+    await fsPromise.access(operatingFolder);
+  } catch (error) {
+    await fsPromise.mkdir(operatingFolder);
+  }
   try {
     await fsExtra.emptyDir(operatingFolder);
   } catch (error) {

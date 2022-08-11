@@ -2,7 +2,6 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const turf = require('@turf/turf');
-const _ = require('lodash');
 
 const Queue = require('../classes/Queue');
 const logger = require('../logger');
@@ -10,16 +9,17 @@ const db = require('../models');
 const slicedWeatherDAL = require('../syrf-schema/dataAccess/v1/slicedWeather');
 const downloadFromS3 = require('../utils/downloadFromS3');
 const sliceGribByRegion = require('../utils/sliceGribByRegion');
-const uploadStreamToS3 = require('../utils/uploadStreamToS3');
-const { VALID_TIMEFRAME } = require('../configs/sourceModel.config');
 const {
   MAX_AREA_CONCURRENT_RUN,
   WEATHER_FILE_TYPES,
 } = require('../configs/general.config');
+const {
+  uploadSlicedGribs,
+  uploadSlicedGeoJsons,
+} = require('./uploadSlicedFiles');
 
 const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
-const slicedBucket = process.env.AWS_S3_SLICED_BUCKET;
 
 exports.removeRedundantFiles = async (files) => {
   const finalFiles = [];
@@ -134,8 +134,6 @@ exports.processFunction = async (data) => {
   const {
     id,
     model,
-    start_time,
-    end_time,
     grib_file_url,
     bbox,
     searchStartTime,
@@ -159,9 +157,6 @@ exports.processFunction = async (data) => {
   const bboxString = bbox.join(',');
   const bboxPolygon = turf.bboxPolygon(bbox);
   const currentTime = new Date();
-  const currentYear = String(currentTime.getUTCFullYear());
-  const currentMonth = String(currentTime.getUTCMonth() + 1).padStart(2, '0');
-  const currentDate = String(currentTime.getUTCDate()).padStart(2, '0');
 
   if (!fs.existsSync(downloadPath)) {
     logger.error(
@@ -169,11 +164,6 @@ exports.processFunction = async (data) => {
     );
     return [];
   }
-
-  const existingSlices = await slicedWeatherDAL.findExistingSlices({
-    competitionUnitId: raceID,
-    originalFileId: id,
-  });
 
   const targetFolder = path.resolve(
     __dirname,
@@ -198,192 +188,57 @@ exports.processFunction = async (data) => {
     },
   );
 
-  // Gribs upload process
   logger.info(`Uploading gribs from processing ${id}`);
-  const gribFiles = await Promise.all(
-    slicedGribs.map(async (slicedGrib) => {
-      const { filePath, variables, levels, runtimes } = slicedGrib;
-      let gribDetail = null;
-      const gribUuid = uuidv4();
-      const sameSlice = existingSlices.find((sliceRow) => {
-        if (
-          sliceRow.fileType !== WEATHER_FILE_TYPES.grib ||
-          !_.isEqual(levels, sliceRow.levels) ||
-          !_.isEqual(variables, sliceRow.variables) ||
-          bboxString !== turf.bbox(sliceRow.boundingBox).join(',')
-        ) {
-          return false;
-        }
-        return true;
-      });
-      if (!sameSlice) {
-        try {
-          const gribStream = fs.createReadStream(filePath);
-          const {
-            writeStream: gribWriteStream,
-            uploadPromise: gribUploadPromise,
-          } = uploadStreamToS3(
-            `${model}/${currentYear}/${currentMonth}/${currentDate}/forecast/${variables.join(
-              '-',
-            )}/gribfile/${gribUuid}.grib2`,
-            slicedBucket,
-          );
-          gribStream.on('open', function () {
-            gribStream.pipe(gribWriteStream);
-          });
-          gribDetail = await gribUploadPromise;
-        } catch (error) {
-          logger.error(`Error uploading grib: ${error.message}`);
-        }
-      } else {
-        logger.info(
-          `Skipped uploading a grib slice of ${id}. Level: ${levels.join(
-            ',',
-          )}, Var: ${variables.join(',')}`,
-        );
-      }
+  const gribFiles = await uploadSlicedGribs(slicedGribs, {
+    competitionUnitId: raceID,
+    bboxString,
+    originalFileId: id,
+    model,
+  });
+  logger.info(`Uploading jsons from processing ${id}.`);
+  const jsonFiles = await uploadSlicedGeoJsons(geoJsons, {
+    competitionUnitId: raceID,
+    bboxString,
+    originalFileId: id,
+    model,
+  });
 
-      fs.unlink(filePath, (err) => {
-        logger.info(`sliced grib of model ${model}-${id} has been deleted`);
-      });
+  // Saving to DB
+  const arrayData = [
+    ...gribFiles.map((row) => {
       return {
-        id: gribUuid,
-        s3Key: gribDetail ? gribDetail.Key : null,
-        variables,
-        levels,
-        runtimes,
+        id: row.id,
+        model,
+        startTime: row.startTime,
+        endTime: row.endTime,
+        s3Key: row.s3Key,
+        fileType: WEATHER_FILE_TYPES.grib,
+        boundingBox: bboxPolygon.geometry,
+        levels: row.levels,
+        variables: row.variables,
+        runtimes: row.runtimes,
+        competitionUnitId: raceID,
+        originalFileId: id,
+        sliceDate: currentTime,
       };
     }),
-  );
-
-  // End of Smaller grib upload process
-
-  // GeoJSON stream to s3
-  logger.info(`Uploading jsons from processing ${id}.`);
-  const jsonFiles = await Promise.all(
-    geoJsons
-      .filter((json) => {
-        const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
-        const jsonStartTime = `${json.time}+00`;
-        const jsonStartTimeUnix = Date.parse(jsonStartTime);
-        const jsonEndTimeUnix = jsonStartTimeUnix + endTimeModifier;
-
-        if (
-          searchStartTime <= jsonEndTimeUnix &&
-          searchEndTime >= jsonStartTimeUnix
-        ) {
-          return true;
-        }
-        return false;
-      })
-      .map(async (json) => {
-        const uuid = uuidv4();
-        const { variables, time, level, filePath } = json;
-        const gsTimes = [new Date(`${time}+00`)];
-
-        const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
-        const startTime = gsTimes[0];
-        const startTimeInUnix = Date.parse(startTime);
-        const endTimeInUnix = startTimeInUnix + endTimeModifier;
-        let jsonDetail = null;
-
-        const sameSlice = existingSlices.find((sliceRow) => {
-          if (
-            sliceRow.fileType !== WEATHER_FILE_TYPES.json ||
-            startTimeInUnix !== Date.parse(sliceRow.startTime) ||
-            endTimeInUnix !== Date.parse(sliceRow.endTime) ||
-            !_.isEqual([level], sliceRow.levels) ||
-            !_.isEqual(variables, sliceRow.variables) ||
-            !_.isEqual(gsTimes, sliceRow.runtimes) ||
-            bboxString !== turf.bbox(sliceRow.boundingBox).join(',')
-          ) {
-            return false;
-          }
-          return true;
-        });
-        if (!sameSlice) {
-          try {
-            const { writeStream, uploadPromise } = uploadStreamToS3(
-              `${model}/${currentYear}/${currentMonth}/${currentDate}/forecast/${variables.join(
-                '-',
-              )}/geojson/${uuid}.json`,
-              slicedBucket,
-            );
-            const readStream = fs.createReadStream(filePath);
-            readStream.pipe(writeStream);
-            jsonDetail = await uploadPromise;
-          } catch (error) {
-            logger.error(`Error uploading geojson: ${error.message}`);
-          }
-        } else {
-          logger.info(
-            `Skipped uploading a json slice of ${id}. Level: ${level}, Time: ${time}, Var: ${variables.join(
-              ',',
-            )}`,
-          );
-        }
-
-        fs.unlink(filePath, () => {
-          logger.info(`sliced json of model ${model}-${id} has been deleted`);
-        });
-
-        return {
-          uuid,
-          startTime: startTimeInUnix,
-          endTime: endTimeInUnix,
-          s3Key: jsonDetail?.Key,
-          levels: [level],
-          runtimes: gsTimes,
-          variables,
-        };
-      }),
-  );
-  // End of geojson stream to s3
-  // Saving to DB
-  const successJsons = jsonFiles.filter((row) => row !== null);
-  const arrayData = [
-    ...gribFiles
-      .filter((row) => {
-        return row.s3Key != null;
-      })
-      .map((row) => {
-        return {
-          id: row.id,
-          model,
-          startTime: start_time,
-          endTime: end_time,
-          s3Key: row.s3Key,
-          fileType: WEATHER_FILE_TYPES.grib,
-          boundingBox: bboxPolygon.geometry,
-          levels: row.levels,
-          variables: row.variables,
-          runtimes: row.runtimes,
-          competitionUnitId: raceID,
-          originalFileId: id,
-          sliceDate: currentTime,
-        };
-      }),
-    ...successJsons
-      .filter((row) => {
-        return row.s3Key != null;
-      })
-      .map((row) => {
-        return {
-          id: row.uuid,
-          model,
-          startTime: row.startTime,
-          endTime: row.endTime,
-          s3Key: row.s3Key,
-          fileType: WEATHER_FILE_TYPES.json,
-          boundingBox: bboxPolygon.geometry,
-          levels: row.levels,
-          variables: row.variables,
-          runtimes: row.runtimes,
-          competitionUnitId: raceID,
-          originalFileId: id,
-          sliceDate: currentTime,
-        };
-      }),
+    ...successJsons.map((row) => {
+      return {
+        id: row.uuid,
+        model,
+        startTime: row.startTime,
+        endTime: row.endTime,
+        s3Key: row.s3Key,
+        fileType: WEATHER_FILE_TYPES.json,
+        boundingBox: bboxPolygon.geometry,
+        levels: row.levels,
+        variables: row.variables,
+        runtimes: row.runtimes,
+        competitionUnitId: raceID,
+        originalFileId: id,
+        sliceDate: currentTime,
+      };
+    }),
   ];
 
   if (arrayData.length > 0) {

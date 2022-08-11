@@ -69,6 +69,7 @@ async function sliceGribByRegion(bbox, filename, options) {
       searchStartTime,
       searchEndTime,
       csvFilePath: `${folder}/${fileID}.csv`,
+      folder,
       sliceJson,
     });
 
@@ -143,6 +144,41 @@ async function sliceGribByRegion(bbox, filename, options) {
                   );
                   break;
                 default:
+                  let mappedVarName = varGroup;
+                  switch (varGroup) {
+                    case 'var192_140_222': {
+                      mappedVarName = 'WDW';
+                      break;
+                    }
+                    case 'var192_140_225': {
+                      mappedVarName = 'DWWW';
+                      break;
+                    }
+                    case 'var192_140_228': {
+                      mappedVarName = 'DWPS';
+                      break;
+                    }
+                    case 'var192_140_233': {
+                      mappedVarName = 'CDWW';
+                      break;
+                    }
+                    case 'var192_140_235': {
+                      mappedVarName = 'MDWW';
+                      break;
+                    }
+                    case 'var192_140_237': {
+                      mappedVarName = 'SHTS';
+                      break;
+                    }
+                    case 'var192_140_238': {
+                      mappedVarName = 'MDTS';
+                      break;
+                    }
+                    case 'var192_140_239': {
+                      mappedVarName = 'MPTS';
+                      break;
+                    }
+                  }
                   await Promise.all(
                     levelsAvailable.map(async (level) => {
                       const filePath = `${folder}/${fileID}_${varGroup}_${filterTime}_${level.replace(
@@ -154,7 +190,7 @@ async function sliceGribByRegion(bbox, filename, options) {
                       );
                       slicedGribs.push({
                         filePath,
-                        variables: [varGroup],
+                        variables: [mappedVarName],
                         levels: [level],
                         runtimes: [runtime],
                       });

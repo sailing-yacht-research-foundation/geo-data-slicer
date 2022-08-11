@@ -29,8 +29,8 @@ print(timeToGet)
 print(__file__)
 
 scriptDir = os.path.dirname(__file__)
-competitionDir = os.path.join(scriptDir, competitionUnitId)
-# os.mkdir(competitionDir)
+competitionDir = os.path.join(scriptDir, '../operating_folder/' + competitionUnitId)
+
 Path(competitionDir).mkdir(parents=True, exist_ok=True)
 
 for time in timeToGet:
@@ -39,8 +39,8 @@ for time in timeToGet:
         'reanalysis-era5-single-levels',
         {
             'product_type': [
-                'ensemble_mean', 'ensemble_members', 'ensemble_spread',
                 'reanalysis',
+                # 'ensemble_mean', 'ensemble_members', 'ensemble_spread',
             ],
             'variable': [
                 'coefficient_of_drag_with_waves', 'mean_direction_of_total_swell',

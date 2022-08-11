@@ -8,16 +8,24 @@ const turf = require('@turf/turf');
 const { v4: uuidv4 } = require('uuid');
 
 const logger = require('../logger');
-const { CONCURRENT_SLICE_REQUEST } = require('../configs/general.config');
+const { WEATHER_FILE_TYPES } = require('../configs/general.config');
 const { bullQueues, competitionUnitStatus } = require('../syrf-schema/enums');
 const cuDAL = require('../syrf-schema/dataAccess/v1/competitionUnit');
-const processRegionRequest = require('../services/processRegionRequest');
+const slicedWeatherDAL = require('../syrf-schema/dataAccess/v1/slicedWeather');
 
+const utc = require('dayjs/plugin/utc');
 const customParseFormat = require('dayjs/plugin/customParseFormat');
 const sliceGribByRegion = require('../utils/sliceGribByRegion');
+const {
+  uploadSlicedGribs,
+  uploadSlicedGeoJsons,
+} = require('../services/uploadSlicedFiles');
 dayjs.extend(customParseFormat);
+dayjs.extend(utc);
 
 var era5Queue;
+
+const weatherModel = 'ERA5';
 
 const setup = (connection) => {
   era5Queue = new Queue(bullQueues.era5Queue, {
@@ -38,7 +46,6 @@ const setup = (connection) => {
       if (!competition) {
         throw new Error('Competition Not Found');
       }
-      // TODO: validates if endTime is set and before the threshold of ERA5 availability (6 days, 1 week for added threshold)
       const thresholdDate = new Date();
       thresholdDate.setUTCDate(thresholdDate.getUTCDate() - 7);
       const { startTime, endTime, status, boundingBox } = competition;
@@ -47,30 +54,22 @@ const setup = (connection) => {
         endTime > thresholdDate ||
         status !== competitionUnitStatus.COMPLETED
       ) {
-        console.log(endTime, thresholdDate, status);
         throw new Error(
           'Competition not completed yet, or endTime is not set / too recent and ERA5 is not available yet',
         );
       }
-
-      console.log(
-        `${startTime} - ${endTime} ${dayjs(startTime).format(
-          'YYYYMMDDHHmmss',
-        )} ${dayjs(endTime).format('YYYYMMDDHHmmss')}`,
-      );
-      //2016-07-09 12:14:00+00	2016-07-09 12:25:18+00
       // Note: Must use python3.6 instead of python. The pip3 installation somehow is installing to that version, while pip installation goes to the conda
       // Options: `python xxx` (will run with conda), `/usr/bin/python xxx` (will run the python installed in the top line of docker), `python3.6` (not really sure how this is available and the working one)
       // Extra note: Cannot run this in dev mode (nodemon), running in node src/main.js should work. Seems the nodemon is not ran by root, therefore can't access the required .cdsapirc file in root folder
       // No resources on the python package mentioning custom cdsapirc location.
-
       try {
+        logger.info('Starting python/cdsapi download script, please wait');
         await execPromise(
-          `python3.6 pyscripts/downloadERA5.py ${competitionUnitId} ${dayjs(
-            startTime,
-          ).format('YYYYMMDDHHmmss')} ${dayjs(endTime).format(
-            'YYYYMMDDHHmmss',
-          )}`,
+          `python3.6 pyscripts/downloadERA5.py ${competitionUnitId} ${dayjs
+            .utc(startTime)
+            .format('YYYYMMDDHHmmss')} ${dayjs
+            .utc(endTime)
+            .format('YYYYMMDDHHmmss')}`,
         );
       } catch (error) {
         console.trace(error);
@@ -79,7 +78,7 @@ const setup = (connection) => {
 
       const competitionDir = path.resolve(
         __dirname,
-        `../../pyscripts/${competitionUnitId}`,
+        `../../operating_folder/${competitionUnitId}`,
       );
       try {
         await fsPromise.access(competitionDir);
@@ -87,36 +86,151 @@ const setup = (connection) => {
         throw new Error('Competition Folder for ERA5 does not exist');
       }
 
+      // Enlarge bbox to 1 degree resolution since most races' bbox are very small
       const bbox = turf.bbox(turf.polygon(boundingBox.coordinates));
+      const leftLon = Math.floor(bbox[0]);
+      const bottomLat = Math.floor(bbox[1]);
+      const rightLon = Math.ceil(bbox[2]);
+      const topLat = Math.ceil(bbox[3]);
+      const containerBbox = [leftLon, bottomLat, rightLon, topLat];
+      const bboxPolygon = turf.bboxPolygon(containerBbox);
+
       const files = await fsPromise.readdir(competitionDir);
-      console.log('file count', files.length);
+      logger.info(`File downloaded count: ${files.length}`);
       for (let i = 0; i < files.length; i++) {
         if (!files[i].endsWith('.grib')) {
           continue;
         }
-        console.log('Doing', files[i]);
+
+        const fileName = files[i].replace('.grib', '');
+        logger.info(
+          `Processing ${fileName} for competition ${competitionUnitId}`,
+        );
         const randomizedID = uuidv4();
-        const fileName = files[i];
         const targetFolder = path.resolve(
           __dirname,
           `../../operating_folder/${randomizedID}`,
         );
-        const { slicedGribs, geoJsons } = await sliceGribByRegion(
-          bbox,
-          `${competitionDir}/${fileName}`,
-          {
-            folder: targetFolder,
-            fileID: randomizedID,
-            model: 'ERA5',
-            searchStartTime: startTime.getTime(),
-            searchEndTime: endTime.getTime(),
-            sliceJson: true,
-          },
+        try {
+          await fsPromise.access(targetFolder);
+        } catch (error) {
+          await fsPromise.mkdir(targetFolder);
+        }
+        try {
+          /*
+          Note on decision to keep using wgrib2 to slice ERA5 files
+          1. The cdo sellonlatbox while successfully minify the original grib file, it generates a file that is not `wgrib` able, it throws error. (Need to retry with better environment, lots of test files are present, might use wrong file)
+          2. Keeping it in GRIB1 format, we have to use grib_get_data to export into csv, and add another script to fix the generated csv (following the ecmwf documentation), which we will have to add some changes for our use case.
+          3. The GRIB slicing part, we have to create a script that can work on grib1. It will also store sliced grib in version 1, which is different from other models, including ERA5 models previously provided in s3.
+          4. Conversion from grib 1 to grib 2 turns out didn't have any loss of data. It's actually what Jon mentioned during the call, where US/Europe has different variable names and that's actually what's happening.
+          */
+          // Setting to grib version 2. Note: There's no need to add any definition to conversion, every data turns out has been mapped if we only use ECMWF, not wgrib2
+          await execPromise(
+            `grib_set -s edition=2 ${competitionDir}/${fileName}.grib ${competitionDir}/${fileName}.grb2`,
+          );
+          await fsPromise.unlink(`${competitionDir}/${fileName}.grib`);
+          const { slicedGribs, geoJsons } = await sliceGribByRegion(
+            containerBbox,
+            `${competitionDir}/${fileName}.grb2`,
+            {
+              folder: targetFolder,
+              fileID: randomizedID,
+              model: weatherModel,
+              searchStartTime: startTime.getTime(),
+              searchEndTime: endTime.getTime(),
+              sliceJson: true,
+            },
+          );
+          const bboxString = containerBbox.join(',');
+
+          const currentTime = new Date();
+          logger.info(
+            `Uploading gribs from processing ${fileName} of competition ${competitionUnitId}`,
+          );
+          const gribFiles = await uploadSlicedGribs(slicedGribs, {
+            bboxString,
+            competitionUnitId,
+            originalFileId: null,
+            model: weatherModel,
+          });
+          logger.info(
+            `Uploading jsons from processing ${fileName} of competition ${competitionUnitId}`,
+          );
+          const jsonFiles = await uploadSlicedGeoJsons(geoJsons, {
+            bboxString,
+            competitionUnitId,
+            originalFileId: null,
+            model: weatherModel,
+          });
+
+          // Saving to DB
+          const arrayData = [
+            ...gribFiles.map((row) => {
+              return {
+                id: row.id,
+                model: weatherModel,
+                startTime: row.startTime,
+                endTime: row.endTime,
+                s3Key: row.s3Key,
+                fileType: WEATHER_FILE_TYPES.grib,
+                boundingBox: bboxPolygon.geometry,
+                levels: row.levels,
+                variables: row.variables,
+                runtimes: row.runtimes,
+                competitionUnitId,
+                originalFileId: null,
+                sliceDate: currentTime,
+              };
+            }),
+            ...jsonFiles.map((row) => {
+              return {
+                id: row.uuid,
+                model: weatherModel,
+                startTime: row.startTime,
+                endTime: row.endTime,
+                s3Key: row.s3Key,
+                fileType: WEATHER_FILE_TYPES.json,
+                boundingBox: bboxPolygon.geometry,
+                levels: row.levels,
+                variables: row.variables,
+                runtimes: row.runtimes,
+                competitionUnitId,
+                originalFileId: null,
+                sliceDate: currentTime,
+              };
+            }),
+          ];
+
+          if (arrayData.length > 0) {
+            try {
+              await slicedWeatherDAL.bulkInsert(arrayData);
+            } catch (error) {
+              logger.error(`Error saving metadata to DB: ${error.message}`);
+            }
+          }
+
+          // Delete the folder no matter what the result is
+          try {
+            await fsPromise.rm(targetFolder, { recursive: true });
+          } catch (error) {
+            logger.error(`Error while cleaning up operation: ${error.message}`);
+          }
+        } catch (error) {
+          logger.error(`Failed to process ERA5 File: ${error.message}`);
+        }
+      }
+
+      // Cleanup ERA5 download folder
+      try {
+        await fsPromise.rm(competitionDir, { recursive: true });
+      } catch (error) {
+        logger.error(
+          `Error while cleaning up ERA5 download directory: ${error.message}`,
         );
       }
       return true;
     },
-    { connection, concurrency: 2 }, // TODO: Check whether we can run the python script concurrently. Should be able since the script now creates a new folder for each competition
+    { connection, concurrency: 2 },
   );
 
   worker.on('failed', (job, err) => {
