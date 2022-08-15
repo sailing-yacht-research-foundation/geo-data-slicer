@@ -104,3 +104,16 @@ dist
 .tern-port
 
 src/database/config.json
+
+scripts/*.txt
+scripts/*.log
+
+.cdsapirc
+
+# ECCodes GRIB1 & GRIB2 definition file
+eccodes/defaults 
+
+operating_folder/
+*.grb
+*.grb2
+*.grib
