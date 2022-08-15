@@ -279,7 +279,9 @@ exports.getArchivedData = async (
     endTime,
   );
   logger.info(`Competition ${raceID} has ${files.length} files to process.`);
-
+  if (files.length === 0) {
+    return [];
+  }
   let maxConcurrentProcess = 3;
   if (turf.area(bboxPolygon) > MAX_AREA_CONCURRENT_RUN) {
     maxConcurrentProcess = 1;

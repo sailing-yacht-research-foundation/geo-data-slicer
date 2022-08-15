@@ -259,8 +259,25 @@ const removeJob = async (jobId) => {
   await era5Queue.remove(jobId);
 };
 
+const getQueueSize = async () => {
+  const jobCount = await era5Queue.getJobCounts(
+    'active',
+    'waiting',
+    'completed',
+    'failed',
+  );
+  return jobCount;
+};
+
+const getActiveJobs = async () => {
+  const activeJobs = await era5Queue.getJobs('active');
+  return activeJobs;
+};
+
 module.exports = {
   setup,
   addJob,
   removeJob,
+  getQueueSize,
+  getActiveJobs,
 };
