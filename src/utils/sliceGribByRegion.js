@@ -9,6 +9,7 @@ const csvToGeoJson = require('./csvToGeoJson');
 const logger = require('../logger');
 
 const customParseFormat = require('dayjs/plugin/customParseFormat');
+const mapERA5Variables = require('./mapERA5Variables');
 dayjs.extend(customParseFormat);
 
 async function sliceGribByRegion(bbox, filename, options) {
@@ -69,6 +70,7 @@ async function sliceGribByRegion(bbox, filename, options) {
       searchStartTime,
       searchEndTime,
       csvFilePath: `${folder}/${fileID}.csv`,
+      folder,
       sliceJson,
     });
 
@@ -143,6 +145,7 @@ async function sliceGribByRegion(bbox, filename, options) {
                   );
                   break;
                 default:
+                  const mappedVarName = mapERA5Variables(varGroup);
                   await Promise.all(
                     levelsAvailable.map(async (level) => {
                       const filePath = `${folder}/${fileID}_${varGroup}_${filterTime}_${level.replace(
@@ -154,7 +157,7 @@ async function sliceGribByRegion(bbox, filename, options) {
                       );
                       slicedGribs.push({
                         filePath,
-                        variables: [varGroup],
+                        variables: [mappedVarName],
                         levels: [level],
                         runtimes: [runtime],
                       });

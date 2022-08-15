@@ -7,6 +7,7 @@ const readFile = promisify(fs.readFile);
 const writeFile = promisify(fs.writeFile);
 
 const { VALID_TIMEFRAME } = require('../configs/sourceModel.config');
+const mapERA5Variables = require('./mapERA5Variables');
 
 async function csvToGeoJson({
   id,
@@ -14,10 +15,10 @@ async function csvToGeoJson({
   searchStartTime,
   searchEndTime,
   csvFilePath,
+  folder,
   sliceJson = true,
 }) {
   const csvData = await readFile(csvFilePath, 'utf-8');
-  const operatingPath = path.resolve(__dirname, `../../operating_folder`);
   const varTotimeToLevelToPoints = {};
   const runtimes = new Set();
   const variablesToLevel = new Map();
@@ -33,10 +34,10 @@ async function csvToGeoJson({
       const jsonStartTime = `${time}+00`;
       const jsonStartTimeUnix = Date.parse(jsonStartTime);
       const jsonEndTimeUnix = jsonStartTimeUnix + endTimeModifier;
-
       if (
-        searchStartTime <= jsonEndTimeUnix &&
-        searchEndTime >= jsonStartTimeUnix
+        !(
+          jsonStartTimeUnix > searchEndTime || jsonEndTimeUnix < searchStartTime
+        )
       ) {
         const pointHash = `${lon}${lat}`;
         variable = variable.replace(/"/gm, '');
@@ -85,8 +86,9 @@ async function csvToGeoJson({
             lon: parseFloat(lon),
           };
         }
-        varTotimeToLevelToPoints[varGroup][time][level][pointHash][variable] =
-          parseFloat(value);
+        varTotimeToLevelToPoints[varGroup][time][level][pointHash][
+          mapERA5Variables(variable)
+        ] = parseFloat(value);
       }
     }
   });
@@ -100,7 +102,7 @@ async function csvToGeoJson({
         )) {
           // Write to file instead
           const timeInMs = new Date(time).getTime();
-          const filePath = `${operatingPath}/${id}_${varGroup}_${timeInMs}_${level.replaceAll(
+          const filePath = `${folder}/${id}_${varGroup}_${timeInMs}_${level.replaceAll(
             ' ',
             '_',
           )}.geojson`;
@@ -118,7 +120,7 @@ async function csvToGeoJson({
               variables.push('VGUST');
               break;
             default:
-              variables.push(varGroup);
+              variables.push(mapERA5Variables(varGroup));
               break;
           }
           await writeFile(

@@ -4,6 +4,7 @@ const logger = require('../logger');
 const recalculateQueue = require('./recalculateQueue');
 const calculateImportedQueue = require('./calculateImportedQueue');
 const slicerQueue = require('./slicerQueue');
+const era5Queue = require('./era5Queue');
 
 let opt = {
   host: process.env.REDIS_HOST,
@@ -37,6 +38,7 @@ const connect = () => {
       recalculateQueue.setup(connection);
       calculateImportedQueue.setup(connection);
       slicerQueue.setup(connection);
+      era5Queue.setup(connection);
 
       resolve();
     });

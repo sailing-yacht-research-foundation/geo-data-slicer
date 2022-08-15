@@ -1,6 +1,8 @@
 require('dotenv').config();
+const fsPromise = require('fs/promises');
 const fsExtra = require('fs-extra');
 const path = require('path');
+const cron = require('node-cron');
 
 const db = require('./models');
 const { startDB } = require('./syrf-schema');
@@ -8,11 +10,19 @@ const { connect: redisConnect } = require('./queues');
 
 const logger = require('./logger');
 const createServer = require('./server');
+const checkFinishedCompetitionERA5 = require('./services/checkFinishedCompetitionERA5');
+const checkStuckQueue = require('./services/checkStuckQueue');
 const port = process.env.PORT || 3000;
 
 (async () => {
   // Cleanup operating folder before starting up
   const operatingFolder = path.resolve(__dirname, `../operating_folder`);
+
+  try {
+    await fsPromise.access(operatingFolder);
+  } catch (error) {
+    await fsPromise.mkdir(operatingFolder);
+  }
   try {
     await fsExtra.emptyDir(operatingFolder);
   } catch (error) {
@@ -23,8 +33,11 @@ const port = process.env.PORT || 3000;
   try {
     const app = createServer();
     await Promise.all([db.startDB(), startDB(), redisConnect()]);
-
     app.listen(port, () => {
+      cron.schedule('15 0 * * *', checkFinishedCompetitionERA5);
+
+      // cron.schedule('30 */3 * * *', checkStuckQueue);
+      cron.schedule('* * * * *', checkStuckQueue);
       logger.info(`Geo Data Slicer has started! Listening on ${port}`);
     });
   } catch (error) {
