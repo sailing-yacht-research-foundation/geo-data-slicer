@@ -2,6 +2,7 @@ require('dotenv').config();
 const fsPromise = require('fs/promises');
 const fsExtra = require('fs-extra');
 const path = require('path');
+const cron = require('node-cron');
 
 const db = require('./models');
 const { startDB } = require('./syrf-schema');
@@ -9,6 +10,7 @@ const { connect: redisConnect } = require('./queues');
 
 const logger = require('./logger');
 const createServer = require('./server');
+const checkFinishedCompetitionERA5 = require('./services/checkFinishedCompetitionERA5');
 const port = process.env.PORT || 3000;
 
 (async () => {
@@ -30,8 +32,8 @@ const port = process.env.PORT || 3000;
   try {
     const app = createServer();
     await Promise.all([db.startDB(), startDB(), redisConnect()]);
-
     app.listen(port, () => {
+      cron.schedule('15 0 * * *', checkFinishedCompetitionERA5);
       logger.info(`Geo Data Slicer has started! Listening on ${port}`);
     });
   } catch (error) {

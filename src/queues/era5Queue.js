@@ -20,12 +20,11 @@ const {
   uploadSlicedGribs,
   uploadSlicedGeoJsons,
 } = require('../services/uploadSlicedFiles');
+const { MODELS } = require('../configs/sourceModel.config');
 dayjs.extend(customParseFormat);
 dayjs.extend(utc);
 
 var era5Queue;
-
-const weatherModel = 'ERA5';
 
 const setup = (connection) => {
   era5Queue = new Queue(bullQueues.era5Queue, {
@@ -52,10 +51,11 @@ const setup = (connection) => {
       if (
         !endTime ||
         endTime > thresholdDate ||
-        status !== competitionUnitStatus.COMPLETED
+        status !== competitionUnitStatus.COMPLETED ||
+        boundingBox == null
       ) {
         throw new Error(
-          'Competition not completed yet, or endTime is not set / too recent and ERA5 is not available yet',
+          'Competition not completed yet, or endTime/boundingBox is not set / too recent and ERA5 is not available yet',
         );
       }
       // Note: Must use python3.6 instead of python. The pip3 installation somehow is installing to that version, while pip installation goes to the conda
@@ -135,7 +135,7 @@ const setup = (connection) => {
             {
               folder: targetFolder,
               fileID: randomizedID,
-              model: weatherModel,
+              model: MODELS.era5,
               searchStartTime: startTime.getTime(),
               searchEndTime: endTime.getTime(),
               sliceJson: true,
@@ -151,7 +151,7 @@ const setup = (connection) => {
             bboxString,
             competitionUnitId,
             originalFileId: null,
-            model: weatherModel,
+            model: MODELS.era5,
           });
           logger.info(
             `Uploading jsons from processing ${fileName} of competition ${competitionUnitId}`,
@@ -160,7 +160,7 @@ const setup = (connection) => {
             bboxString,
             competitionUnitId,
             originalFileId: null,
-            model: weatherModel,
+            model: MODELS.era5,
           });
 
           // Saving to DB
@@ -168,7 +168,7 @@ const setup = (connection) => {
             ...gribFiles.map((row) => {
               return {
                 id: row.id,
-                model: weatherModel,
+                model: MODELS.era5,
                 startTime: row.startTime,
                 endTime: row.endTime,
                 s3Key: row.s3Key,
@@ -185,7 +185,7 @@ const setup = (connection) => {
             ...jsonFiles.map((row) => {
               return {
                 id: row.uuid,
-                model: weatherModel,
+                model: MODELS.era5,
                 startTime: row.startTime,
                 endTime: row.endTime,
                 s3Key: row.s3Key,

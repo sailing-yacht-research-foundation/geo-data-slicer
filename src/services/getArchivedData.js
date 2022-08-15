@@ -188,14 +188,12 @@ exports.processFunction = async (data) => {
     },
   );
 
-  logger.info(`Uploading gribs from processing ${id}`);
   const gribFiles = await uploadSlicedGribs(slicedGribs, {
     competitionUnitId: raceID,
     bboxString,
     originalFileId: id,
     model,
   });
-  logger.info(`Uploading jsons from processing ${id}.`);
   const jsonFiles = await uploadSlicedGeoJsons(geoJsons, {
     competitionUnitId: raceID,
     bboxString,
@@ -222,7 +220,7 @@ exports.processFunction = async (data) => {
         sliceDate: currentTime,
       };
     }),
-    ...successJsons.map((row) => {
+    ...jsonFiles.map((row) => {
       return {
         id: row.uuid,
         model,
@@ -256,7 +254,7 @@ exports.processFunction = async (data) => {
     logger.error(`Error while cleaning up operation: ${error.message}`);
   }
 
-  return successJsons.map((row) => {
+  return jsonFiles.map((row) => {
     return {
       key: row.s3Key,
       model,

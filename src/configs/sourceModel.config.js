@@ -44,4 +44,8 @@ const INCLUDED_LEVELS = {
   HRRR_SUB_HOURLY: ['10 m above ground', 'surface'],
 };
 
-module.exports = { INCLUDED_LEVELS, VALID_TIMEFRAME };
+const MODELS = {
+  era5: 'ERA5',
+};
+
+module.exports = { INCLUDED_LEVELS, VALID_TIMEFRAME, MODELS };

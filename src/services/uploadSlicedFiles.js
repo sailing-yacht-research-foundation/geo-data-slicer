@@ -31,11 +31,12 @@ async function uploadSlicedGribs(
   let failedFileDeletion = 0;
   const gribFiles = await Promise.all(
     slicedGribs.map(async (slicedGrib) => {
-      const { filePath, variables, levels, runtimes } = slicedGrib;
+      const { filePath, variables, levels, runtimes: rawRuntimes } = slicedGrib;
+      const runtimes = rawRuntimes.map((row) => new Date(row));
       let gribDetail = null;
       const gribUuid = uuidv4();
       const endTimeModifier = VALID_TIMEFRAME[model] || 3600000;
-      const startTimeInUnix = Date.parse(runtimes[0]);
+      const startTimeInUnix = runtimes[0].getTime();
       const endTimeInUnix = startTimeInUnix + endTimeModifier;
 
       const sameSlice = existingSlices.find((sliceRow) => {
@@ -45,7 +46,7 @@ async function uploadSlicedGribs(
           endTimeInUnix !== Date.parse(sliceRow.endTime) ||
           !_.isEqual(levels, sliceRow.levels) ||
           !_.isEqual(variables, sliceRow.variables) ||
-          !_.isEqual(gsTimes, sliceRow.runtimes) ||
+          !_.isEqual(runtimes, sliceRow.runtimes) ||
           bboxString !== turf.bbox(sliceRow.boundingBox).join(',')
         ) {
           return false;
