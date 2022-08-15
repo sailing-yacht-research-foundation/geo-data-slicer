@@ -11,6 +11,7 @@ const { connect: redisConnect } = require('./queues');
 const logger = require('./logger');
 const createServer = require('./server');
 const checkFinishedCompetitionERA5 = require('./services/checkFinishedCompetitionERA5');
+const checkStuckQueue = require('./services/checkStuckQueue');
 const port = process.env.PORT || 3000;
 
 (async () => {
@@ -34,6 +35,9 @@ const port = process.env.PORT || 3000;
     await Promise.all([db.startDB(), startDB(), redisConnect()]);
     app.listen(port, () => {
       cron.schedule('15 0 * * *', checkFinishedCompetitionERA5);
+
+      // cron.schedule('30 */3 * * *', checkStuckQueue);
+      cron.schedule('* * * * *', checkStuckQueue);
       logger.info(`Geo Data Slicer has started! Listening on ${port}`);
     });
   } catch (error) {
