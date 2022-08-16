@@ -125,18 +125,18 @@ RUN wget https://github.com/Kitware/CMake/releases/download/v3.15.2/cmake-3.15.2
     && rm cmake-3.15.2.tar.gz \
     && rm -rf cmake-3.15.2
 # ecCODES
-RUN wget https://confluence.ecmwf.int/download/attachments/45757960/eccodes-2.15.0-Source.tar.gz \
-    && tar -xzf  eccodes-2.15.0-Source.tar.gz \
+RUN wget https://confluence.ecmwf.int/download/attachments/45757960/eccodes-2.26.0-Source.tar.gz \
+    && tar -xzf  eccodes-2.26.0-Source.tar.gz \
     && mkdir buildeccode \
     && cd buildeccode \
-    && cmake ../eccodes-2.15.0-Source \
+    && cmake ../eccodes-2.26.0-Source \
     && make \
     && ctest \
     && make install \
     && cd .. \
     && rm -rf buildeccode \
-    && rm eccodes-2.15.0-Source.tar.gz \
-    && rm -rf eccodes-2.15.0-Source \
+    && rm eccodes-2.26.0-Source.tar.gz \
+    && rm -rf eccodes-2.26.0-Source \
     && pip3 install eccodes-python 
 
 # Conda and Iris
@@ -182,6 +182,10 @@ RUN export JAVA_HOME=/usr
 RUN export PATH=$PATH:/usr/lib/node_modules/weacast-grib2json/bin
 
 # Thank goodness we're done.
+
+RUN pip3 install cdsapi
+
+COPY .cdsapirc /root/.cdsapirc
 
 WORKDIR /data
 RUN npm install pm2 -g

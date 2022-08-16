@@ -55,3 +55,12 @@ The CodeDeploy script will zip all the project files and folders (including subm
     **endTimeUnixMS** |`number`| Starting time of data to be sliced
     **webhook** |`string`| URL target for processed data
     **webhookToken** |`string`| Token for webhook
+
+## ERA5 Notes
+
+- The script will accept a competition unit id, startTime, and endTime of the competition in `yyyymmddHHMMSS` format. It will then loop every 1h increment from the start to end, and call the cds api library that will be downloaded to the filesystem. Our node Slicer should then process it like any other grib and upload it to s3.
+- Need to run the python script using "python3.6 pyscripts/downloadERA5.py [competitionUnitId] [startTime] [endTime]"
+- Using python xxxx triggers an error of no module named socket when using the cdsapi package and I can't seem to find the solution. `pip install cdsapi` works but it installed to the conda env python, while
+  `pip3 install cdsapi` is directed to the python3.6, so using that works. It's like are 3 python that can be used in this image and the one that work is the python3.6. The main python (in `/usr/bin/python`) might also work, but I'm not too familiar with the pip tools to install the cdsapi, pip3 and pip is installing for the other 2 python which is confusing.
+- Sliced JSONs will use the ECMWF short codes, including the 5 parameters that are automatically converted by `wgrib2` to prevent confusion between variables. (Reference: https://apps.ecmwf.int/codes/grib/param-db?filter=All)
+- Scheduled job will run everyday, on 0:15 UTC time, slicing for races that finished 7 days ago.

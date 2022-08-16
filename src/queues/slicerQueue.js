@@ -73,8 +73,25 @@ const removeJob = async (jobId) => {
   await slicerQueue.remove(jobId);
 };
 
+const getQueueSize = async () => {
+  const jobCount = await slicerQueue.getJobCounts(
+    'active',
+    'waiting',
+    'completed',
+    'failed',
+  );
+  return jobCount;
+};
+
+const getActiveJobs = async () => {
+  const activeJobs = await slicerQueue.getJobs('active');
+  return activeJobs;
+};
+
 module.exports = {
   setup,
   addJob,
   removeJob,
+  getQueueSize,
+  getActiveJobs,
 };
