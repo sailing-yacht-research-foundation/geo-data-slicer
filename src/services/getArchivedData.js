@@ -3,16 +3,12 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const turf = require('@turf/turf');
 
-const Queue = require('../classes/Queue');
 const logger = require('../logger');
 const db = require('../models');
 const slicedWeatherDAL = require('../syrf-schema/dataAccess/v1/slicedWeather');
 const downloadFromS3 = require('../utils/downloadFromS3');
 const sliceGribByRegion = require('../utils/sliceGribByRegion');
-const {
-  MAX_AREA_CONCURRENT_RUN,
-  WEATHER_FILE_TYPES,
-} = require('../configs/general.config');
+const { WEATHER_FILE_TYPES } = require('../configs/general.config');
 const {
   uploadSlicedGribs,
   uploadSlicedGeoJsons,
@@ -282,27 +278,25 @@ exports.getArchivedData = async (
   if (files.length === 0) {
     return [];
   }
-  let maxConcurrentProcess = 3;
-  if (turf.area(bboxPolygon) > MAX_AREA_CONCURRENT_RUN) {
-    maxConcurrentProcess = 1;
-  }
-  const queue = new Queue({
-    maxConcurrentProcess,
-    processFunction: this.processFunction,
-  });
-  queue.enqueue(
-    files.map((row) => {
-      return {
-        ...row,
+  // Note: Removed the custom concurrent queue in each individual processing
+  const results = [];
+  for (let i = 0; i < files.length; i++) {
+    try {
+      const result = await this.processFunction({
+        ...files[i],
         bbox,
         searchStartTime: startTime,
         searchEndTime: endTime,
         raceID,
         sliceJson,
-      };
-    }),
-  );
-
-  const results = await queue.waitFinish();
-  return results;
+      });
+      results.push(result);
+    } catch (error) {
+      logger.error(
+        `Error processing archived data for Competition: ${raceID} - File: ${files[i].model}|${files[i].id}`,
+      );
+      logger.error(error);
+    }
+  }
+  return results.flat();
 };
