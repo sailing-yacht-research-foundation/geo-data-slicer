@@ -1,7 +1,7 @@
 const winston = require('winston');
 const path = require('path');
 const { createLogger, format, transports } = winston;
-const { combine, timestamp, printf, colorize } = format;
+const { combine, timestamp, printf, colorize, errors } = format;
 
 const logFormat = printf(({ level, message, service, timestamp }) => {
   return `${timestamp} [${service}] ${level}: ${message}`;
@@ -16,7 +16,7 @@ winston.addColors({
 
 const logger = createLogger({
   level: 'info',
-  format: combine(timestamp(), logFormat),
+  format: combine(errors({ stack: true }), timestamp(), logFormat),
   defaultMeta: { service: 'geo-data-slicer' },
   exceptionHandlers: [
     new transports.File({ filename: `${logFolder}/exceptions.log` }),
