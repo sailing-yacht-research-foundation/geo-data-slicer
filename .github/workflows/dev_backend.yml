@@ -28,7 +28,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Zip Folder
-        run: zip -r slicer-dev.zip ./data ./src ./operating_folder ./Dockerfile ./.Dockerignore ./.env.example ./*.sh ./*.js ./*.json ./*.yml
+        run: zip -r slicer-dev.zip ./data ./src ./pyscripts ./Dockerfile ./.Dockerignore ./.env.example ./*.sh ./*.js ./*.json ./*.yml
 
       - name: Upload to S3
         run: aws s3 cp slicer-dev.zip s3://syrf-dev-env-variables
