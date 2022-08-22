@@ -34,8 +34,14 @@ async function checkStuckQueue() {
       job.processedOn &&
       job.processedOn < Date.now() - SLICING_STUCK_THRESHOLD
     ) {
-      await job.remove();
-      slicerJobsRemoved.push(job.id);
+      try {
+        await job.remove();
+        slicerJobsRemoved.push(job.id);
+      } catch (error) {
+        logger.error(
+          `Failed to remove stuck job: ${job.id}. Error: ${error.message}`,
+        );
+      }
     }
   }
   if (slicerJobsRemoved.length > 0) {
