@@ -295,9 +295,9 @@ exports.getArchivedData = async (
       logger.error(error);
     }
     if (updateProgress) {
-      await updateProgress((i * 100) / files.length, {
+      await updateProgress(((i + 1) * 100) / files.length, {
         fileCount: files.length,
-        processedFileCount: i,
+        processedFileCount: i + 1,
         lastTimestamp: Date.now(),
       });
     }
