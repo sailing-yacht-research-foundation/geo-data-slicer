@@ -4,7 +4,10 @@ const slicerQueue = require('../queues/slicerQueue');
 const {
   SLICING_STUCK_THRESHOLD,
   ERA5_STUCK_THRESHOLD,
+  CONCURRENT_SLICE_REQUEST,
 } = require('../configs/general.config');
+
+const lastSlicerState = new Map();
 
 async function checkStuckQueue() {
   logger.info('Checking Queues for stuck jobs');
@@ -28,21 +31,69 @@ async function checkStuckQueue() {
     logger.info(`Removed ID: ${eraJobsRemoved.join(',')}`);
   }
 
+  // Cleanup map from no longer active jobs
+  lastSlicerState.forEach((_val, key) => {
+    if (slicerActiveJobs.findIndex((job) => job.id === key) === -1) {
+      lastSlicerState.delete(key);
+    }
+  });
   const slicerJobsRemoved = [];
+  let failedRemoveCount = 0;
   for (const job of slicerActiveJobs) {
-    if (
-      job.processedOn &&
-      job.processedOn < Date.now() - SLICING_STUCK_THRESHOLD
-    ) {
-      try {
-        await job.remove();
-        slicerJobsRemoved.push(job.id);
-      } catch (error) {
-        logger.error(
-          `Failed to remove stuck job: ${job.id}. Error: ${error.message}`,
-        );
+    const { metadata } = job.data;
+    if (metadata) {
+      const { processedFileCount, lastTimestamp } = metadata;
+      const previousState = lastSlicerState.get(job.id);
+      if (
+        previousState &&
+        previousState.lastTimestamp === lastTimestamp &&
+        previousState.processedFileCount === processedFileCount &&
+        lastTimestamp < Date.now() - SLICING_STUCK_THRESHOLD
+      ) {
+        try {
+          await job.remove();
+          slicerJobsRemoved.push(job.id);
+        } catch (error) {
+          failedRemoveCount++;
+          logger.error(
+            `Failed to remove stuck job: ${job.id}. Error: ${error.message}`,
+          );
+        }
+      } else {
+        lastSlicerState.set(job.id, {
+          lastTimestamp,
+          processedFileCount,
+        });
+      }
+    } else {
+      // Leftover from previous instance/version, or somehow, the getArchivedData is never run
+      if (
+        job.processedOn &&
+        job.processedOn < Date.now() - SLICING_STUCK_THRESHOLD
+      ) {
+        try {
+          await job.remove();
+          slicerJobsRemoved.push(job.id);
+        } catch (error) {
+          failedRemoveCount++;
+          logger.error(
+            `Failed to remove stuck job: ${job.id}. Error: ${error.message}`,
+          );
+        }
       }
     }
+  }
+  if (
+    failedRemoveCount === slicerActiveJobs.length &&
+    failedRemoveCount === CONCURRENT_SLICE_REQUEST
+  ) {
+    // All active jobs are stuck and can't be removed. Need to exit the slicer
+    logger.info(
+      `Exiting Slicer. All Slicer concurrent slot is used and can't be removed. Active Jobs: ${slicerActiveJobs
+        .map((row) => row.id)
+        .join(', ')}`,
+    );
+    process.exit(0);
   }
   if (slicerJobsRemoved.length > 0) {
     logger.info(

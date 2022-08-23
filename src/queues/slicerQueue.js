@@ -32,16 +32,33 @@ const setup = (connection) => {
         sliceJson = true,
       } = job.data;
 
-      await processRegionRequest({
-        roi,
-        startTimeUnixMS,
-        endTimeUnixMS,
-        webhook,
-        webhookToken,
-        updateFrequencyMinutes,
-        raceID,
-        sliceJson,
-      });
+      const updateProgress = async (
+        progValue,
+        { fileCount, processedFileCount, lastTimestamp },
+      ) => {
+        await job.updateProgress(progValue);
+        await job.update({
+          ...job.data,
+          metadata: {
+            fileCount,
+            processedFileCount,
+            lastTimestamp,
+          },
+        });
+      };
+      await processRegionRequest(
+        {
+          roi,
+          startTimeUnixMS,
+          endTimeUnixMS,
+          webhook,
+          webhookToken,
+          updateFrequencyMinutes,
+          raceID,
+          sliceJson,
+        },
+        updateProgress,
+      );
 
       return true;
     },

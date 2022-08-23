@@ -8,7 +8,7 @@ const WEATHER_FILE_TYPES = {
   json: 'JSON',
 };
 
-const SLICING_STUCK_THRESHOLD = 7200000;
+const SLICING_STUCK_THRESHOLD = 600000;
 const ERA5_STUCK_THRESHOLD = 3600000;
 
 module.exports = {
