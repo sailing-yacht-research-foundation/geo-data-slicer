@@ -29,11 +29,15 @@ router.get('/', async function (req, res) {
     slicer: {
       queue: slicerQueueInfo,
       activeJobs: slicerActiveJobs.map((row) => {
-        const { id, timestamp, processedOn } = row;
+        const { id, timestamp, progress, processedOn } = row;
+        const { metadata } = row.data;
+
         return {
           id,
           timestamp: new Date(timestamp).toISOString(),
           processedOn: new Date(processedOn).toISOString(),
+          progress: `${progress.toFixed(2)} %`,
+          metadata,
         };
       }),
     },

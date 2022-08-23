@@ -19,16 +19,19 @@ const recalculateQueue = require('../queues/recalculateQueue');
 const calculateImportedQueue = require('../queues/calculateImportedQueue');
 const logger = require('../logger');
 
-async function processRegionRequest({
-  roi,
-  startTimeUnixMS,
-  endTimeUnixMS,
-  webhook,
-  webhookToken,
-  updateFrequencyMinutes,
-  raceID,
-  sliceJson = true,
-}) {
+async function processRegionRequest(
+  {
+    roi,
+    startTimeUnixMS,
+    endTimeUnixMS,
+    webhook,
+    webhookToken,
+    updateFrequencyMinutes,
+    raceID,
+    sliceJson = true,
+  },
+  updateProgress = null,
+) {
   const bbox = turf.bbox(roi);
   const leftLon = Math.floor(bbox[0]);
   const bottomLat = Math.floor(bbox[1]);
@@ -37,11 +40,14 @@ async function processRegionRequest({
   const containerBbox = [leftLon, bottomLat, rightLon, topLat];
 
   const archivedPromise = getArchivedData(
-    containerBbox,
-    startTimeUnixMS,
-    endTimeUnixMS,
-    raceID,
-    sliceJson,
+    {
+      bbox: containerBbox,
+      startTime: startTimeUnixMS,
+      endTime: endTimeUnixMS,
+      raceID,
+      sliceJson,
+    },
+    updateProgress,
   );
 
   let shipReportPromise = null;

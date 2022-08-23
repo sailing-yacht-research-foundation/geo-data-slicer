@@ -36,7 +36,7 @@ const port = process.env.PORT || 3000;
     app.listen(port, () => {
       cron.schedule('15 0 * * *', checkFinishedCompetitionERA5);
 
-      cron.schedule('30 */3 * * *', checkStuckQueue);
+      cron.schedule('*/10 * * * *', checkStuckQueue);
       logger.info(`Geo Data Slicer has started! Listening on ${port}`);
     });
   } catch (error) {
