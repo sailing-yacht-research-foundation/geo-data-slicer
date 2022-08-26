@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 
 const apiV1 = require('./routes/api-v1');
 const healthcheckRoutes = require('./routes/healthcheck');
@@ -6,6 +7,8 @@ const healthcheckRoutes = require('./routes/healthcheck');
 function createServer() {
   const app = express();
   app.use(express.json());
+  app.use(cors());
+
   if (process.env.NODE_ENV !== 'test') {
     app.use(
       require('express-status-monitor')({
