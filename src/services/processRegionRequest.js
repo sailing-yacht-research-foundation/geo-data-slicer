@@ -170,6 +170,10 @@ async function processRegionRequest(
       }
     }
   }
+  // Still had issue with some job stay in active queue (mostly during deployment, but those can be removed)
+  // Not sure why, the logs from dev/prod both has reached the log above (is a scraped/imported track etc) and no error logged
+  // https://github.com/OptimalBits/bull/issues/1766 Following the recommendation to add log here and in the job right before returning
+  logger.info(`Competition ${raceID} has been processed`);
 }
 
 module.exports = processRegionRequest;
