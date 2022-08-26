@@ -23,9 +23,9 @@ router.get('/', async function (req, res) {
         const { metadata } = row.data;
         return {
           id,
-          timestamp: new Date(timestamp).toISOString(),
-          processedOn: new Date(processedOn).toISOString(),
-          progress: `${progress.toFixed(2)} %`,
+          timestamp,
+          processedOn,
+          progress,
           metadata,
         };
       }),
@@ -38,9 +38,9 @@ router.get('/', async function (req, res) {
 
         return {
           id,
-          timestamp: new Date(timestamp).toISOString(),
-          processedOn: new Date(processedOn).toISOString(),
-          progress: `${progress.toFixed(2)} %`,
+          timestamp,
+          processedOn,
+          progress,
           metadata,
         };
       }),
