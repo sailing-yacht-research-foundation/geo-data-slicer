@@ -96,6 +96,15 @@ const setup = (connection) => {
       const bboxPolygon = turf.bboxPolygon(containerBbox);
 
       const files = await fsPromise.readdir(competitionDir);
+      await job.updateProgress(50); // Download is done, so 50% is done.
+      await job.update({
+        ...job.data,
+        metadata: {
+          downloadedFileCount: files.length,
+          parsedFileCount: 0,
+          lastTimestamp: Date.now(),
+        },
+      });
       logger.info(`File downloaded count: ${files.length}`);
       for (let i = 0; i < files.length; i++) {
         if (!files[i].endsWith('.grib')) {
@@ -218,6 +227,15 @@ const setup = (connection) => {
         } catch (error) {
           logger.error(`Failed to process ERA5 File: ${error.message}`);
         }
+        await job.updateProgress(50 + ((i + 1) * 50) / files.length);
+        await job.update({
+          ...job.data,
+          metadata: {
+            downloadedFileCount: files.length,
+            parsedFileCount: i + 1,
+            lastTimestamp: Date.now(),
+          },
+        });
       }
 
       // Cleanup ERA5 download folder

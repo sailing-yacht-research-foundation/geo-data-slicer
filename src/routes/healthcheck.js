@@ -18,22 +18,30 @@ router.get('/', async function (req, res) {
     era5: {
       queue: eraQueueInfo,
       activeJobs: eraActiveJobs.map((row) => {
-        const { id, timestamp, processedOn } = row;
+        const { id, timestamp, processedOn, progress } = row;
+
+        const { metadata } = row.data;
         return {
           id,
-          timestamp: new Date(timestamp).toISOString(),
-          processedOn: new Date(processedOn).toISOString(),
+          timestamp,
+          processedOn,
+          progress,
+          metadata,
         };
       }),
     },
     slicer: {
       queue: slicerQueueInfo,
       activeJobs: slicerActiveJobs.map((row) => {
-        const { id, timestamp, processedOn } = row;
+        const { id, timestamp, progress, processedOn } = row;
+        const { metadata } = row.data;
+
         return {
           id,
-          timestamp: new Date(timestamp).toISOString(),
-          processedOn: new Date(processedOn).toISOString(),
+          timestamp,
+          processedOn,
+          progress,
+          metadata,
         };
       }),
     },

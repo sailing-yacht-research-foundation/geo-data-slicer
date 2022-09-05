@@ -19,16 +19,19 @@ const recalculateQueue = require('../queues/recalculateQueue');
 const calculateImportedQueue = require('../queues/calculateImportedQueue');
 const logger = require('../logger');
 
-async function processRegionRequest({
-  roi,
-  startTimeUnixMS,
-  endTimeUnixMS,
-  webhook,
-  webhookToken,
-  updateFrequencyMinutes,
-  raceID,
-  sliceJson = true,
-}) {
+async function processRegionRequest(
+  {
+    roi,
+    startTimeUnixMS,
+    endTimeUnixMS,
+    webhook,
+    webhookToken,
+    updateFrequencyMinutes,
+    raceID,
+    sliceJson = true,
+  },
+  updateProgress = null,
+) {
   const bbox = turf.bbox(roi);
   const leftLon = Math.floor(bbox[0]);
   const bottomLat = Math.floor(bbox[1]);
@@ -37,11 +40,14 @@ async function processRegionRequest({
   const containerBbox = [leftLon, bottomLat, rightLon, topLat];
 
   const archivedPromise = getArchivedData(
-    containerBbox,
-    startTimeUnixMS,
-    endTimeUnixMS,
-    raceID,
-    sliceJson,
+    {
+      bbox: containerBbox,
+      startTime: startTimeUnixMS,
+      endTime: endTimeUnixMS,
+      raceID,
+      sliceJson,
+    },
+    updateProgress,
   );
 
   let shipReportPromise = null;
@@ -164,6 +170,10 @@ async function processRegionRequest({
       }
     }
   }
+  // Still had issue with some job stay in active queue (mostly during deployment, but those can be removed)
+  // Not sure why, the logs from dev/prod both has reached the log above (is a scraped/imported track etc) and no error logged
+  // https://github.com/OptimalBits/bull/issues/1766 Following the recommendation to add log here and in the job right before returning
+  logger.info(`Competition ${raceID} has been processed`);
 }
 
 module.exports = processRegionRequest;

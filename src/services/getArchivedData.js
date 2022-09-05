@@ -262,11 +262,8 @@ exports.processFunction = async (data) => {
 };
 
 exports.getArchivedData = async (
-  bbox,
-  startTime,
-  endTime,
-  raceID,
-  sliceJson,
+  { bbox, startTime, endTime, raceID, sliceJson },
+  updateProgress = null,
 ) => {
   const bboxPolygon = turf.bboxPolygon(bbox);
   const files = await this.getWeatherFilesByRegion(
@@ -296,6 +293,13 @@ exports.getArchivedData = async (
         `Error processing archived data for Competition: ${raceID} - File: ${files[i].model}|${files[i].id}`,
       );
       logger.error(error);
+    }
+    if (updateProgress) {
+      await updateProgress(((i + 1) * 100) / files.length, {
+        fileCount: files.length,
+        processedFileCount: i + 1,
+        lastTimestamp: Date.now(),
+      });
     }
   }
   return results.flat();

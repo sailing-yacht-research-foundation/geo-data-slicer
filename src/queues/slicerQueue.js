@@ -32,17 +32,35 @@ const setup = (connection) => {
         sliceJson = true,
       } = job.data;
 
-      await processRegionRequest({
-        roi,
-        startTimeUnixMS,
-        endTimeUnixMS,
-        webhook,
-        webhookToken,
-        updateFrequencyMinutes,
-        raceID,
-        sliceJson,
-      });
+      const updateProgress = async (
+        progValue,
+        { fileCount, processedFileCount, lastTimestamp },
+      ) => {
+        await job.updateProgress(progValue);
+        await job.update({
+          ...job.data,
+          metadata: {
+            fileCount,
+            processedFileCount,
+            lastTimestamp,
+          },
+        });
+      };
+      await processRegionRequest(
+        {
+          roi,
+          startTimeUnixMS,
+          endTimeUnixMS,
+          webhook,
+          webhookToken,
+          updateFrequencyMinutes,
+          raceID,
+          sliceJson,
+        },
+        updateProgress,
+      );
 
+      logger.info(`Job for ${raceID} has been finished, exiting...`);
       return true;
     },
     { connection, concurrency: CONCURRENT_SLICE_REQUEST },
@@ -52,7 +70,6 @@ const setup = (connection) => {
     logger.error(`Slicer Queue job failed. JobID: [${job.id}], Error: ${err}`);
   });
   worker.on('completed', (job) => {
-    job.remove();
     logger.info(`Slicer Queue job completed. JobID: [${job.id}]`);
   });
 };
