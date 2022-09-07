@@ -1,9 +1,13 @@
 const { Queue, Worker } = require('bullmq');
-const logger = require('../logger');
 
+const logger = require('../logger');
+const db = require('../models');
 const { CONCURRENT_SLICE_REQUEST } = require('../configs/general.config');
 const { bullQueues } = require('../syrf-schema/enums');
 const processRegionRequest = require('../services/processRegionRequest');
+const {
+  addNewSkippedCompetition,
+} = require('../services/skipCompetitionService');
 
 var slicerQueue;
 
@@ -32,9 +36,16 @@ const setup = (connection) => {
         sliceJson = true,
       } = job.data;
 
+      // const durationToFetch = (startTimeUnixMS - endTimeUnixMS) / 3600000;
+      // if (durationToFetch > 720) {
+      //   // Over a month, skipping for now as it's going to be taking too long
+      //   // Even a race with 1month duration will probably have at least 6k files to process
+      //   logger.info(`Job for ${raceID} has been skipped, exiting...`);
+      //   return true;
+      // }
       const updateProgress = async (
         progValue,
-        { fileCount, processedFileCount, lastTimestamp },
+        { fileCount, processedFileCount, lastTimestamp, message, isCanceled },
       ) => {
         await job.updateProgress(progValue);
         await job.update({
@@ -43,6 +54,8 @@ const setup = (connection) => {
             fileCount,
             processedFileCount,
             lastTimestamp,
+            isCanceled,
+            message,
           },
         });
       };
@@ -59,6 +72,15 @@ const setup = (connection) => {
         },
         updateProgress,
       );
+
+      if (job.data.metadata?.isCanceled) {
+        // This job is canceled from within
+        await addNewSkippedCompetition({
+          competitionUnitId,
+          totalFileCount: job.data.metadata?.fileCount,
+          message: job.data.metadata?.message,
+        });
+      }
 
       logger.info(`Job for ${raceID} has been finished, exiting...`);
       return true;
