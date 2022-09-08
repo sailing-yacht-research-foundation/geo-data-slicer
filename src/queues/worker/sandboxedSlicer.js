@@ -1,8 +1,6 @@
 const logger = require('../../logger');
 const processRegionRequest = require('../../services/processRegionRequest');
-const {
-  addNewSkippedCompetition,
-} = require('../../services/skipCompetitionService');
+const skipSliceDAL = require('../../syrf-schema/dataAccess/v1/skippedCompetitionWeather');
 
 module.exports = async (job) => {
   if (!job.data) {
@@ -22,17 +20,33 @@ module.exports = async (job) => {
     sliceJson = true,
   } = job.data;
 
+  // Can't access .progress, storing in this variable instead.
+  let progressData = {
+    progressValue: 0,
+    fileCount: 0,
+    processedFileCount: 0,
+    lastTimestamp: Date.now(),
+    message: '',
+    isCanceled: false,
+  };
+
   const updateProgress = async (
     progressValue,
     { fileCount, processedFileCount, lastTimestamp, message, isCanceled },
   ) => {
-    await job.updateProgress({
+    progressData = {
       progressValue,
       fileCount,
       processedFileCount,
       lastTimestamp,
       message,
       isCanceled,
+    };
+    await job.updateProgress({
+      progressValue,
+      fileCount,
+      processedFileCount,
+      lastTimestamp,
     });
   };
 
@@ -41,8 +55,6 @@ module.exports = async (job) => {
     fileCount: 0,
     processedFileCount: 0,
     lastTimestamp: Date.now(),
-    message: '',
-    isCanceled: false,
   });
   await processRegionRequest(
     {
@@ -58,13 +70,16 @@ module.exports = async (job) => {
     updateProgress,
   );
 
-  if (job.progress.isCanceled) {
-    // This job is canceled from within
-    await addNewSkippedCompetition({
-      competitionUnitId,
-      totalFileCount: job.data.metadata?.fileCount,
-      message: job.data.metadata?.message,
-    });
+  if (progressData.isCanceled) {
+    try {
+      await skipSliceDAL.create({
+        competitionUnitId: raceID,
+        totalFileCount: progressData.fileCount ?? 0,
+        message: progressData.message ?? 'Canceled (no message provided)',
+      });
+    } catch (err) {
+      logger.error(`Failed saving skipped competition record: ${err.message}`);
+    }
   }
 
   logger.info(`Job for ${raceID} has been finished, exiting...`);

@@ -24,10 +24,6 @@ db.sequelize = sequelize;
 
 db.sourceModel = require('./sourceModel.model.js')(sequelize, Sequelize);
 db.weatherData = require('./weatherData.model.js')(sequelize, Sequelize);
-db.skippedCompetition = require('./skippedCompetition.model')(
-  sequelize,
-  Sequelize,
-);
 
 db.startDB = async () => {
   await sequelize.authenticate();
