@@ -1,9 +1,9 @@
 const { Queue, Worker } = require('bullmq');
+const path = require('path');
 
 const logger = require('../logger');
 const { CONCURRENT_SLICE_REQUEST } = require('../configs/general.config');
 const { bullQueues } = require('../syrf-schema/enums');
-const sandboxedSlicer = require('./worker/sandboxedSlicer');
 
 var slicerQueue;
 
@@ -11,6 +11,8 @@ const setup = (connection) => {
   slicerQueue = new Queue(bullQueues.slicerQueue, {
     connection,
   });
+
+  const sandboxedSlicer = path.join(__dirname, './worker/sandboxedSlicer.js');
 
   const worker = new Worker(bullQueues.slicerQueue, sandboxedSlicer, {
     connection,

@@ -23,21 +23,27 @@ module.exports = async (job) => {
   } = job.data;
 
   const updateProgress = async (
-    progValue,
+    progressValue,
     { fileCount, processedFileCount, lastTimestamp, message, isCanceled },
   ) => {
-    await job.updateProgress(progValue);
-    await job.update({
-      ...job.data,
-      metadata: {
-        fileCount,
-        processedFileCount,
-        lastTimestamp,
-        isCanceled,
-        message,
-      },
+    await job.updateProgress({
+      progressValue,
+      fileCount,
+      processedFileCount,
+      lastTimestamp,
+      message,
+      isCanceled,
     });
   };
+
+  // Initial progress set, so the progress prop in healthcheck won't return a number
+  await updateProgress(0, {
+    fileCount: 0,
+    processedFileCount: 0,
+    lastTimestamp: Date.now(),
+    message: '',
+    isCanceled: false,
+  });
   await processRegionRequest(
     {
       roi,
@@ -52,7 +58,7 @@ module.exports = async (job) => {
     updateProgress,
   );
 
-  if (job.data.metadata?.isCanceled) {
+  if (job.progress.isCanceled) {
     // This job is canceled from within
     await addNewSkippedCompetition({
       competitionUnitId,
