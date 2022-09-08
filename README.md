@@ -64,3 +64,10 @@ The CodeDeploy script will zip all the project files and folders (including subm
   `pip3 install cdsapi` is directed to the python3.6, so using that works. It's like are 3 python that can be used in this image and the one that work is the python3.6. The main python (in `/usr/bin/python`) might also work, but I'm not too familiar with the pip tools to install the cdsapi, pip3 and pip is installing for the other 2 python which is confusing.
 - Sliced JSONs will use the ECMWF short codes, including the 5 parameters that are automatically converted by `wgrib2` to prevent confusion between variables. (Reference: https://apps.ecmwf.int/codes/grib/param-db?filter=All)
 - Scheduled job will run everyday, on 0:15 UTC time, slicing for races that finished 7 days ago.
+
+## Sandboxed Slicer Process
+
+According to the bullmq's documentation, the concurrency is only possible when workers perform asynchronous operations (call to db, or external http service) (Reference: https://docs.bullmq.io/guide/workers/concurrency). Since our slicer are also using grib tools that might be CPU intensive, it is recommended to use Sandboxed processors. This will spawn a separate process (`ps -aux` will show more processes other than the main node process), and it might not be killed properly in development mode (where the process might be restarted multiple times due to watching changes) and shooting up the ram usage.
+Notes:
+
+- Sandboxed processor job won't have access to some of the functionality (e.g. no `job.update()`) or props (e.g. `progress` which in sandboxed job, becomes a function that is deprecated and will be removed in future versions) of regular job.
