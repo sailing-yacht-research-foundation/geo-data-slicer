@@ -40,7 +40,7 @@ async function checkStuckQueue() {
   const slicerJobsRemoved = [];
   let failedRemoveCount = 0;
   for (const job of slicerActiveJobs) {
-    const { metadata } = job.data;
+    const { progress: metadata } = job.data;
     if (metadata) {
       const { processedFileCount, lastTimestamp } = metadata;
       const previousState = lastSlicerState.get(job.id);

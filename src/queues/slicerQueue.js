@@ -1,9 +1,9 @@
 const { Queue, Worker } = require('bullmq');
-const logger = require('../logger');
+const path = require('path');
 
+const logger = require('../logger');
 const { CONCURRENT_SLICE_REQUEST } = require('../configs/general.config');
 const { bullQueues } = require('../syrf-schema/enums');
-const processRegionRequest = require('../services/processRegionRequest');
 
 var slicerQueue;
 
@@ -12,59 +12,12 @@ const setup = (connection) => {
     connection,
   });
 
-  const worker = new Worker(
-    bullQueues.slicerQueue,
-    async (job) => {
-      if (!job.data) {
-        logger.error(`No Data provided on slicer queue job ${job.id}`);
-        return false;
-      }
-      logger.info(`Starting slice process. Job ID: ${job.id}`);
+  const sandboxedSlicer = path.join(__dirname, './worker/sandboxedSlicer.js');
 
-      const {
-        roi,
-        startTimeUnixMS,
-        endTimeUnixMS,
-        webhook,
-        webhookToken,
-        updateFrequencyMinutes,
-        raceID,
-        sliceJson = true,
-      } = job.data;
-
-      const updateProgress = async (
-        progValue,
-        { fileCount, processedFileCount, lastTimestamp },
-      ) => {
-        await job.updateProgress(progValue);
-        await job.update({
-          ...job.data,
-          metadata: {
-            fileCount,
-            processedFileCount,
-            lastTimestamp,
-          },
-        });
-      };
-      await processRegionRequest(
-        {
-          roi,
-          startTimeUnixMS,
-          endTimeUnixMS,
-          webhook,
-          webhookToken,
-          updateFrequencyMinutes,
-          raceID,
-          sliceJson,
-        },
-        updateProgress,
-      );
-
-      logger.info(`Job for ${raceID} has been finished, exiting...`);
-      return true;
-    },
-    { connection, concurrency: CONCURRENT_SLICE_REQUEST },
-  );
+  const worker = new Worker(bullQueues.slicerQueue, sandboxedSlicer, {
+    connection,
+    concurrency: CONCURRENT_SLICE_REQUEST,
+  });
 
   worker.on('failed', (job, err) => {
     logger.error(`Slicer Queue job failed. JobID: [${job.id}], Error: ${err}`);

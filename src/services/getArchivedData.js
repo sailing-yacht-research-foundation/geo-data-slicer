@@ -8,11 +8,15 @@ const db = require('../models');
 const slicedWeatherDAL = require('../syrf-schema/dataAccess/v1/slicedWeather');
 const downloadFromS3 = require('../utils/downloadFromS3');
 const sliceGribByRegion = require('../utils/sliceGribByRegion');
-const { WEATHER_FILE_TYPES } = require('../configs/general.config');
+const {
+  WEATHER_FILE_TYPES,
+  MAX_SLICE_FILE_COUNT,
+} = require('../configs/general.config');
 const {
   uploadSlicedGribs,
   uploadSlicedGeoJsons,
 } = require('./uploadSlicedFiles');
+const skipSliceDAL = require('../syrf-schema/dataAccess/v1/skippedCompetitionWeather');
 
 const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
@@ -275,7 +279,27 @@ exports.getArchivedData = async (
   if (files.length === 0) {
     return [];
   }
-  // Note: Removed the custom concurrent queue in each individual processing
+
+  if (files.length > MAX_SLICE_FILE_COUNT) {
+    const hasSkippedBefore = await skipSliceDAL.checkSkippedCompetition(raceID);
+    if (!hasSkippedBefore) {
+      if (updateProgress) {
+        await updateProgress(0, {
+          fileCount: files.length,
+          processedFileCount: 0,
+          lastTimestamp: Date.now(),
+          isCanceled: true,
+          message: `File exceeded slice limit of ${MAX_SLICE_FILE_COUNT}. Total files: ${files.length}`,
+        });
+      }
+      logger.info(`Competition ${raceID} exceeds slice limit, skipping...`);
+      return [];
+    }
+
+    logger.info(
+      `Competition ${raceID} exceeds slice limit, but has been skipped before. Continue Slice process`,
+    );
+  }
   const results = [];
   for (let i = 0; i < files.length; i++) {
     try {
