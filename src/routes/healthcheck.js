@@ -34,14 +34,13 @@ router.get('/', async function (req, res) {
       queue: slicerQueueInfo,
       activeJobs: slicerActiveJobs.map((row) => {
         const { id, timestamp, progress, processedOn } = row;
-        const { metadata } = row.data;
 
         return {
           id,
           timestamp,
           processedOn,
-          progress,
-          metadata,
+          progress: progress.progressValue,
+          metadata: progress,
         };
       }),
     },

@@ -39,6 +39,8 @@ async function processRegionRequest(
   const topLat = Math.ceil(bbox[3]);
   const containerBbox = [leftLon, bottomLat, rightLon, topLat];
 
+  const competitionDetail = await competitionDAL.getById(raceID);
+
   const archivedPromise = getArchivedData(
     {
       bbox: containerBbox,
@@ -53,7 +55,11 @@ async function processRegionRequest(
   let shipReportPromise = null;
   let windfinderPromise = null;
   let noaaBuoyPromise = null;
-  if (turf.area(turf.bboxPolygon(containerBbox)) > MAX_AREA_CONCURRENT_RUN) {
+  if (
+    (competitionDetail?.calendarEvent &&
+      competitionDetail.calendarEvent.source !== dataSources.SYRF) ||
+    turf.area(turf.bboxPolygon(containerBbox)) > MAX_AREA_CONCURRENT_RUN
+  ) {
     windfinderPromise = new Promise(() => {
       setTimeout(() => {
         weatherSourceToFeatureCollection([]);
@@ -111,7 +117,6 @@ async function processRegionRequest(
     turf.bboxPolygon(containerBbox),
   );
 
-  const competitionDetail = await competitionDAL.getById(raceID);
   // If source is not from syrf
   if (
     competitionDetail?.calendarEvent &&
