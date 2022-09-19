@@ -60,22 +60,19 @@ async function processRegionRequest(
       competitionDetail.calendarEvent.source !== dataSources.SYRF) ||
     turf.area(turf.bboxPolygon(containerBbox)) > MAX_AREA_CONCURRENT_RUN
   ) {
-    windfinderPromise = new Promise(() => {
+    windfinderPromise = new Promise((resolve) => {
       setTimeout(() => {
-        weatherSourceToFeatureCollection([]);
-        return [];
+        resolve(weatherSourceToFeatureCollection([]));
       }, 1000);
     });
-    noaaBuoyPromise = new Promise(() => {
+    noaaBuoyPromise = new Promise((resolve) => {
       setTimeout(() => {
-        weatherSourceToFeatureCollection([]);
-        return [];
+        resolve(weatherSourceToFeatureCollection([]));
       }, 1000);
     });
-    shipReportPromise = new Promise(() => {
+    shipReportPromise = new Promise((resolve) => {
       setTimeout(() => {
-        weatherSourceToFeatureCollection([]);
-        return [];
+        resolve(weatherSourceToFeatureCollection([]));
       }, 1000);
     });
   } else {
@@ -111,6 +108,9 @@ async function processRegionRequest(
       windfinderPromise,
       noaaBuoyPromise,
     ]);
+  logger.info(
+    `Competition ${raceID} has finished all data collection, proceeding to queue for other job/webhooks`,
+  );
 
   const shipReports = turf.pointsWithinPolygon(
     shipReportsFull,
