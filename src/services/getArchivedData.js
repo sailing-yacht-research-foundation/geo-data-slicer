@@ -142,7 +142,7 @@ exports.processFunction = async (data) => {
     sliceJson,
   } = data;
   const randomizedID = uuidv4();
-  logger.info(`Processing ${model} - ${id} -> ${randomizedID}`);
+  logger.info(`Processing ${raceID} | ${model} - ${id} -> ${randomizedID}`);
   const downloadPath = path.resolve(
     __dirname,
     // Instead of using original id, use random id, so multiple request that use same file won't throw error on deletion
@@ -326,5 +326,6 @@ exports.getArchivedData = async (
       });
     }
   }
+  logger.info(`Done processing archived data for ${raceID}`);
   return results.flat();
 };

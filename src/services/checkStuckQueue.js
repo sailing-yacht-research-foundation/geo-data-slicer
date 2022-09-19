@@ -40,7 +40,7 @@ async function checkStuckQueue() {
   const slicerJobsRemoved = [];
   let failedRemoveCount = 0;
   for (const job of slicerActiveJobs) {
-    const { progress: metadata } = job.data;
+    const { progress: metadata } = job;
     if (metadata) {
       const { processedFileCount, lastTimestamp } = metadata;
       const previousState = lastSlicerState.get(job.id);
@@ -64,22 +64,6 @@ async function checkStuckQueue() {
           lastTimestamp,
           processedFileCount,
         });
-      }
-    } else {
-      // Leftover from previous instance/version, or somehow, the getArchivedData is never run
-      if (
-        job.processedOn &&
-        job.processedOn < Date.now() - SLICING_STUCK_THRESHOLD
-      ) {
-        try {
-          await job.remove();
-          slicerJobsRemoved.push(job.id);
-        } catch (error) {
-          failedRemoveCount++;
-          logger.error(
-            `Failed to remove stuck job: ${job.id}. Error: ${error.message}`,
-          );
-        }
       }
     }
   }
