@@ -1,5 +1,8 @@
 const express = require('express');
 
+const version = require('../../package.json').version;
+const modelVersion = require('../syrf-schema/package.json').version;
+
 const era5Queue = require('../queues/era5Queue');
 const slicerQueue = require('../queues/slicerQueue');
 
@@ -15,6 +18,8 @@ router.get('/', async function (req, res) {
     uptime: process.uptime(),
     message: 'OK',
     timestamp: Date.now(),
+    version,
+    modelVersion,
     era5: {
       queue: eraQueueInfo,
       activeJobs: eraActiveJobs.map((row) => {
