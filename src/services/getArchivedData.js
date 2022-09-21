@@ -11,6 +11,7 @@ const sliceGribByRegion = require('../utils/sliceGribByRegion');
 const {
   WEATHER_FILE_TYPES,
   MAX_SLICE_FILE_COUNT,
+  ARCHIVED_EXTEND_TIME,
 } = require('../configs/general.config');
 const {
   uploadSlicedGribs,
@@ -100,19 +101,48 @@ exports.getWeatherFilesByRegion = async (roi, startTime, endTime) => {
     Original Query (with fix to the bug found) for reference: SELECT * FROM  "WeatherDatas" WHERE NOT ("start_time" > filterEndTime OR "end_time" < filterStartTime)
     */
   //
-  const startDate = new Date(startTime - 1000 * 60 * 60 * 24);
-  const endDate = new Date(endTime + 1000 * 60 * 60 * 24);
+  const extendedStartTime = new Date(
+    startTime.getTime() - ARCHIVED_EXTEND_TIME,
+  );
+  const extendedEndTime = new Date(endTime.getTime() + ARCHIVED_EXTEND_TIME);
+
+  const subQuery = `(
+    SELECT model, start_time, end_time, MAX (created_at) 
+    FROM "WeatherDatas" 
+    WHERE start_time >= :extendedStartTime 
+      AND start_time <= :endTime
+      AND end_time >= :startTime
+      AND end_time <= :extendedEndTime
+    GROUP BY "model", "start_time", "end_time"
+  )`;
   const allFiles = await db.weatherData.findAll({
     where: {
-      model: { [Op.in]: modelsToFetch },
-      start_time: {
-        [Op.lte]: endDate,
-        [Op.gte]: startDate,
-      },
-      end_time: {
-        [Op.lte]: endDate,
-        [Op.gte]: startDate,
-      },
+      [Op.and]: [
+        {
+          model: { [Op.in]: modelsToFetch },
+          start_time: {
+            [Op.lte]: new Date(endTime),
+            [Op.gte]: extendedStartTime,
+          },
+          end_time: {
+            [Op.lte]: extendedEndTime,
+            [Op.gte]: new Date(startTime),
+          },
+        },
+        archiverDB.sequelize.where(
+          archiverDB.sequelize.literal(
+            `(model, start_time, end_time, created_at)`,
+          ),
+          Op.in,
+          archiverDB.sequelize.literal(subQuery),
+        ),
+      ],
+    },
+    replacements: {
+      startTime: new Date(startTime),
+      endTime: new Date(endTime),
+      extendedStartTime,
+      extendedEndTime,
     },
     order: [['created_at', 'DESC']],
     raw: true,
