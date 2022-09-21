@@ -125,28 +125,31 @@ async function processRegionRequest(
     logger.info(
       `Competition ${raceID} is a scraped/imported track, adding recalculation queue`,
     );
-    switch (competitionDetail.calendarEvent.source) {
-      case dataSources.IMPORT: {
-        // Imported tracks, add job to calculate import queue (AE Regular mode, running in dev)
-        calculateImportedQueue.addJob(
-          {
-            competitionUnitId: raceID,
-          },
-          { jobId: raceID },
-        );
-        break;
-      }
-      default: {
-        // Scraped races, add job to recalculate queue (AE Recalculate mode)
-        // Note: This is disabled in dev
-        recalculateQueue.addJob(
-          {
-            competitionUnitId: raceID,
-            recalculateWeather: true,
-          },
-          { jobId: raceID },
-        );
-        break;
+    // Make it only added to recalculate queue if there are weather data sliced, since recalculate without weather will result in similar data
+    if (archivedData.length !== 0) {
+      switch (competitionDetail.calendarEvent.source) {
+        case dataSources.IMPORT: {
+          // Imported tracks, add job to calculate import queue (AE Regular mode, running in dev)
+          calculateImportedQueue.addJob(
+            {
+              competitionUnitId: raceID,
+            },
+            { jobId: raceID },
+          );
+          break;
+        }
+        default: {
+          // Scraped races, add job to recalculate queue (AE Recalculate mode)
+          // Note: This is disabled in dev
+          recalculateQueue.addJob(
+            {
+              competitionUnitId: raceID,
+              recalculateWeather: true,
+            },
+            { jobId: raceID },
+          );
+          break;
+        }
       }
     }
   } else if (webhook) {
