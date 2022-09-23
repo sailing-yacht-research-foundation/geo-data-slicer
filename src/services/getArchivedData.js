@@ -11,6 +11,7 @@ const sliceGribByRegion = require('../utils/sliceGribByRegion');
 const {
   WEATHER_FILE_TYPES,
   MAX_SLICE_FILE_COUNT,
+  ARCHIVED_EXTEND_TIME,
 } = require('../configs/general.config');
 const {
   uploadSlicedGribs,
@@ -20,34 +21,6 @@ const skipSliceDAL = require('../syrf-schema/dataAccess/v1/skippedCompetitionWea
 
 const Op = db.Sequelize.Op;
 const bucketName = process.env.AWS_S3_BUCKET;
-
-exports.removeRedundantFiles = async (files) => {
-  const finalFiles = [];
-  for (let i = 0; i < files.length; i++) {
-    const { created_at, model, start_time, end_time } = files[i];
-    const similarFile = finalFiles.find((record) => {
-      if (
-        record.model === model &&
-        String(record.start_time) === String(start_time) &&
-        String(record.end_time) === String(end_time)
-      ) {
-        return true;
-      }
-      return false;
-    });
-    if (similarFile) {
-      // Only mutate if created at is newer
-      if (similarFile.created_at < created_at) {
-        // mutate the value into
-        similarFile = { ...files[i] };
-      }
-    } else {
-      // No file exist
-      finalFiles.push({ ...files[i] });
-    }
-  }
-  return finalFiles;
-};
 
 exports.getWeatherFilesByRegion = async (roi, startTime, endTime) => {
   const query = `SELECT "model_name" FROM "SourceModels" WHERE ST_Contains ( "spatial_boundary", ST_GeomFromText ( :polygon, 4326 ) )`;
@@ -100,34 +73,49 @@ exports.getWeatherFilesByRegion = async (roi, startTime, endTime) => {
     Original Query (with fix to the bug found) for reference: SELECT * FROM  "WeatherDatas" WHERE NOT ("start_time" > filterEndTime OR "end_time" < filterStartTime)
     */
   //
-  const startDate = new Date(startTime - 1000 * 60 * 60 * 24);
-  const endDate = new Date(endTime + 1000 * 60 * 60 * 24);
+  const extendedStartTime = new Date(startTime - ARCHIVED_EXTEND_TIME);
+  const extendedEndTime = new Date(endTime + ARCHIVED_EXTEND_TIME);
+
+  const subQuery = `(
+    SELECT model, start_time, end_time, MAX (created_at) 
+    FROM "WeatherDatas" 
+    WHERE start_time >= :extendedStartTime 
+      AND start_time <= :endTime
+      AND end_time >= :startTime
+      AND end_time <= :extendedEndTime
+    GROUP BY "model", "start_time", "end_time"
+  )`;
   const allFiles = await db.weatherData.findAll({
     where: {
-      model: { [Op.in]: modelsToFetch },
-      start_time: {
-        [Op.lte]: endDate,
-        [Op.gte]: startDate,
-      },
-      end_time: {
-        [Op.lte]: endDate,
-        [Op.gte]: startDate,
-      },
+      [Op.and]: [
+        {
+          model: { [Op.in]: modelsToFetch },
+          start_time: {
+            [Op.lte]: new Date(endTime),
+            [Op.gte]: extendedStartTime,
+          },
+          end_time: {
+            [Op.lte]: extendedEndTime,
+            [Op.gte]: new Date(startTime),
+          },
+        },
+        db.sequelize.where(
+          db.sequelize.literal(`(model, start_time, end_time, created_at)`),
+          Op.in,
+          db.sequelize.literal(subQuery),
+        ),
+      ],
+    },
+    replacements: {
+      startTime: new Date(startTime),
+      endTime: new Date(endTime),
+      extendedStartTime,
+      extendedEndTime,
     },
     order: [['created_at', 'DESC']],
     raw: true,
   });
-
-  // Filter non-useful gribs
-  const files = allFiles.filter((file) => {
-    const { start_time: gribStartTime, end_time: gribEndTime } = file;
-    return !(
-      gribStartTime.getTime() > endTime || gribEndTime.getTime() < startTime
-    );
-  });
-  logger.info(`Fetched ${allFiles.length}, filtered down to: ${files.length}`);
-
-  return this.removeRedundantFiles(files);
+  return allFiles;
 };
 
 exports.processFunction = async (data) => {
@@ -277,6 +265,16 @@ exports.getArchivedData = async (
   );
   logger.info(`Competition ${raceID} has ${files.length} files to process.`);
   if (files.length === 0) {
+    if (updateProgress) {
+      await updateProgress(0, {
+        fileCount: files.length,
+        processedFileCount: 0,
+        lastTimestamp: Date.now(),
+        isCanceled: true,
+        message:
+          'No archived files satisfy the specified time range of this competition competition time.',
+      });
+    }
     return [];
   }
 

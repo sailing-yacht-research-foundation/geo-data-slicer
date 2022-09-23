@@ -71,3 +71,8 @@ According to the bullmq's documentation, the concurrency is only possible when w
 Notes:
 
 - Sandboxed processor job won't have access to some of the functionality (e.g. no `job.update()`) or props (e.g. `progress` which in sandboxed job, becomes a function that is deprecated and will be removed in future versions) of regular job.
+
+## Backfilling Races Sliced Weather
+
+- Backfilling all races (except imported tracks) will be done by the scheduled task every 30 mins, which will enqueue more races when there are low number of races pending for slicing in queue.
+- Any races that has all the required fields for slicing will be included, excluding races that has failed before, or skipped because of too large or other reasons.
