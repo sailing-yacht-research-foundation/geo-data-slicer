@@ -15,8 +15,6 @@ const weatherSourceToFeatureCollection = require('../utils/weatherSourceToFeatur
 const competitionDAL = require('../syrf-schema/dataAccess/v1/competitionUnit');
 const { dataSources } = require('../syrf-schema/enums');
 const { MAX_AREA_CONCURRENT_RUN } = require('../configs/general.config');
-const recalculateQueue = require('../queues/recalculateQueue');
-const calculateImportedQueue = require('../queues/calculateImportedQueue');
 const logger = require('../logger');
 
 async function processRegionRequest(

@@ -76,7 +76,7 @@ const addJob = async (data, opts) => {
     removeOnComplete: true,
     ...opts,
   });
-  logger.info('Added new job to slicer queue');
+  logger.info(`Added new job ${opts?.jobId} to slicer queue`);
 };
 
 const removeJob = async (jobId) => {

@@ -12,7 +12,7 @@ const slicerUrl = 'http://localhost:3000/api/v1';
   logger.info('Starting script');
   const nonSlicedCompetitions =
     await skipSliceDAL.getUnskippedUnslicedCompetition(10);
-  logger.info(`Fetched ${nonSlicedCompetitions} races`);
+  logger.info(`Fetched ${nonSlicedCompetitions.length} races`);
   for (let i = 0; i < nonSlicedCompetitions.length; i++) {
     const { id, startTime, endTime, boundingBox } = nonSlicedCompetitions[i];
     try {
