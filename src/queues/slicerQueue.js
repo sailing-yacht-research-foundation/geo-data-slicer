@@ -3,7 +3,9 @@ const path = require('path');
 
 const logger = require('../logger');
 const { CONCURRENT_SLICE_REQUEST } = require('../configs/general.config');
-const { bullQueues } = require('../syrf-schema/enums');
+const { bullQueues, dataSources } = require('../syrf-schema/enums');
+const calculateImportedQueue = require('./calculateImportedQueue');
+const recalculateQueue = require('./recalculateQueue');
 
 var slicerQueue;
 
@@ -21,9 +23,47 @@ const setup = (connection) => {
 
   worker.on('failed', (job, err) => {
     logger.error(`Slicer Queue job failed. JobID: [${job.id}], Error: ${err}`);
+    console.trace(err);
   });
-  worker.on('completed', (job) => {
-    logger.info(`Slicer Queue job completed. JobID: [${job.id}]`);
+  worker.on('completed', (job, result) => {
+    logger.info(
+      `Slicer Queue job completed. JobID: [${job.id}]. Proceeding with recalculate check.`,
+    );
+    if (result?.source && result.source !== dataSources.SYRF) {
+      const { source, slicedWeatherCount } = result;
+      logger.info(
+        `Competition ${job.id} is a scraped/imported track, checking sliced count.`,
+      );
+      // Make it only added to recalculate queue if there are weather data sliced, since recalculate without weather will result in similar data
+      if (slicedWeatherCount > 0) {
+        logger.info(
+          `Competition ${job.id} has ${slicedWeatherCount} sliced file, proceed to recalculate queue`,
+        );
+        switch (source) {
+          case dataSources.IMPORT: {
+            // Imported tracks, add job to calculate import queue (AE Regular mode, running in dev)
+            calculateImportedQueue.addJob(
+              {
+                competitionUnitId: job.id,
+              },
+              { jobId: job.id },
+            );
+            break;
+          }
+          default: {
+            // Scraped races, add job to recalculate queue (AE Recalculate mode)
+            recalculateQueue.addJob(
+              {
+                competitionUnitId: job.id,
+                recalculateWeather: true,
+              },
+              { jobId: job.id },
+            );
+            break;
+          }
+        }
+      }
+    }
   });
 };
 

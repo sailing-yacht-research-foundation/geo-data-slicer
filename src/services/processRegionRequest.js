@@ -117,42 +117,7 @@ async function processRegionRequest(
     turf.bboxPolygon(containerBbox),
   );
 
-  // If source is not from syrf
-  if (
-    competitionDetail?.calendarEvent &&
-    competitionDetail.calendarEvent.source !== dataSources.SYRF
-  ) {
-    logger.info(
-      `Competition ${raceID} is a scraped/imported track, adding recalculation queue`,
-    );
-    // Make it only added to recalculate queue if there are weather data sliced, since recalculate without weather will result in similar data
-    if (archivedData.length !== 0) {
-      switch (competitionDetail.calendarEvent.source) {
-        case dataSources.IMPORT: {
-          // Imported tracks, add job to calculate import queue (AE Regular mode, running in dev)
-          calculateImportedQueue.addJob(
-            {
-              competitionUnitId: raceID,
-            },
-            { jobId: raceID },
-          );
-          break;
-        }
-        default: {
-          // Scraped races, add job to recalculate queue (AE Recalculate mode)
-          // Note: This is disabled in dev
-          recalculateQueue.addJob(
-            {
-              competitionUnitId: raceID,
-              recalculateWeather: true,
-            },
-            { jobId: raceID },
-          );
-          break;
-        }
-      }
-    }
-  } else if (webhook) {
+  if (webhook) {
     // Skipping webhook if it's imported/scraped track
     logger.info(`Sending webhook to ${webhook}. Race ID: ${raceID}`);
     try {
@@ -182,6 +147,10 @@ async function processRegionRequest(
   // Not sure why, the logs from dev/prod both has reached the log above (is a scraped/imported track etc) and no error logged
   // https://github.com/OptimalBits/bull/issues/1766 Following the recommendation to add log here and in the job right before returning
   logger.info(`Competition ${raceID} has been processed`);
+  return {
+    source: competitionDetail?.calendarEvent.source,
+    slicedWeatherCount: archivedData.length,
+  };
 }
 
 module.exports = processRegionRequest;
