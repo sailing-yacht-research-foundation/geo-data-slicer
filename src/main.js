@@ -37,7 +37,9 @@ const port = process.env.PORT || 3000;
     app.listen(port, () => {
       cron.schedule('15 0 * * *', checkFinishedCompetitionERA5);
       cron.schedule('*/10 * * * *', checkStuckQueue);
-      cron.schedule('30 * * * *', automatedBackfillSlice);
+      if (process.env.AUTOMATED_SLICER_BACKFILL_ENABLED === 'true') {
+        cron.schedule('39 * * * *', automatedBackfillSlice);
+      }
       logger.info(`Geo Data Slicer has started! Listening on ${port}`);
     });
   } catch (error) {
