@@ -13,6 +13,9 @@ const createServer = require('./server');
 const checkFinishedCompetitionERA5 = require('./services/checkFinishedCompetitionERA5');
 const checkStuckQueue = require('./services/checkStuckQueue');
 const automatedBackfillSlice = require('./services/automatedBackfillSlice');
+const {
+  AUTOMATED_SLICER_BACKFILL_MAX_QUEUE,
+} = require('./configs/general.config');
 const port = process.env.PORT || 3000;
 
 (async () => {
@@ -37,7 +40,7 @@ const port = process.env.PORT || 3000;
     app.listen(port, () => {
       cron.schedule('15 0 * * *', checkFinishedCompetitionERA5);
       cron.schedule('*/10 * * * *', checkStuckQueue);
-      if (process.env.AUTOMATED_SLICER_BACKFILL_ENABLED === 'true') {
+      if (AUTOMATED_SLICER_BACKFILL_MAX_QUEUE > 0) {
         cron.schedule('39 * * * *', automatedBackfillSlice);
       }
       logger.info(`Geo Data Slicer has started! Listening on ${port}`);
