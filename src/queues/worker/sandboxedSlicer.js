@@ -56,7 +56,7 @@ module.exports = async (job) => {
     processedFileCount: 0,
     lastTimestamp: Date.now(),
   });
-  await processRegionRequest(
+  const result = await processRegionRequest(
     {
       roi,
       startTimeUnixMS,
@@ -83,5 +83,5 @@ module.exports = async (job) => {
   }
 
   logger.info(`Job for ${raceID} has been finished, exiting...`);
-  return true;
+  return result;
 };
